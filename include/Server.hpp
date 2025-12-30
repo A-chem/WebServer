@@ -33,21 +33,25 @@ class LocationConf
        LocationConf()
         : autoindex(false), redirect(std::make_pair(0, "")){};
         ~LocationConf(){};
+        void setAutoindex(bool value) { autoindex = value; }
+        bool getAutoindex() const { return autoindex; }
 };
 class ServerConf
 {
     private:
         std::vector<std::pair<std::string, int> > listen;
         std::string port;
+        std::string root;
         std::string index;
-        const size_t cmbs;
+        size_t cmbs;
         std::map<int, std::string> error_pages;
         std::vector<LocationConf> locations;
 
         public:
-        ServerConf() : index("index.html"), cmbs(0){};
-        ~ServerConf(){};
+        ServerConf();
+        ~ServerConf();
         void parseServer(const std::vector<std::string> &tokens, size_t& i, ServerConf& server);
+         size_t getCmbs() const { return cmbs; };
 };
 
 class Conf
