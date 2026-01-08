@@ -56,8 +56,6 @@ void ServerConf::parseServer(const std::vector<std::string> &tokens, size_t& i, 
         else if (token == "client_max_body_size") server.cmbs = parseSize(tokens, i);
         else if (token == "error_page") 
         {
-                        std::cout << tokens[i] << std::endl;
-
             i++;
             int code = std::atoi(tokens[i].c_str());
             i++;
