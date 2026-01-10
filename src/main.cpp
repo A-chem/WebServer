@@ -20,6 +20,6 @@ int main()
     {
         std::cout << e.what() << std::endl;
     }
-    // std::cout << "Parsed " <<  config.getServers().size()  << " servers.\n";
+    //std::cout << "Parsed " <<  config.getServers().size()  << " servers.\n";
 
 }

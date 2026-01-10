@@ -24,6 +24,7 @@ class LocationConf
         std::vector<std::string> methods;
         std::string root;
         std::string index;
+     //   size_t cmbs;
         bool autoindex;
         std::string   upload_path;
         std::pair<int, std::string> redirect;
@@ -40,9 +41,8 @@ class ServerConf
 {
     private:
         std::vector<std::pair<std::string, int> > listen;
-        std::string port;
         std::string root;
-        std::string index;
+        std::vector<std::string> index;
         size_t cmbs;
         std::map<int, std::string> error_pages;
         std::vector<LocationConf> locations;
@@ -51,7 +51,30 @@ class ServerConf
         ServerConf();
         ~ServerConf();
         void parseServer(const std::vector<std::string> &tokens, size_t& i, ServerConf& server);
-         size_t getCmbs() const { return cmbs; };
+        void setCmds(size_t val);
+        size_t getCmbs() const { return cmbs; };
+        void display() const {
+        std::cout << "Server Configuration:\n";
+
+            std::cout << "Listen addresses:\n";
+            for (size_t j = 0; j < listen.size(); ++j)
+                std::cout << "  " << listen[j].first << ":" << listen[j].second << "\n";
+            std::cout << "Root: " << root << "\n";
+
+            std::cout << "Index files:\n";
+            for (size_t j = 0; j < index.size(); ++j)
+                std::cout << "  " << index[j] << "\n";
+
+            std::cout << "Client max body size: " << cmbs << "\n";
+
+            std::cout << "Error pages:\n";
+            for (std::map<int, std::string>::const_iterator it = error_pages.begin(); it != error_pages.end(); ++it)
+                std::cout << "  " << it->first << " -> " << it->second << "\n";
+
+            // std::cout << "Locations:\n";
+            // for (size_t j = 0; j < locations.size(); ++j)
+            //     locations[j].print();
+    }
 };
 
 class Conf

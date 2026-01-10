@@ -32,15 +32,20 @@ void Conf::parseConfig(const std::vector<std::string> &tokens, Conf& config)
 
 Conf::~Conf(){};
 
-ServerConf:: ServerConf() : index("index.html"), cmbs(0){};
+ServerConf:: ServerConf() : cmbs(0){};
 
 ServerConf::~ServerConf(){};
+
+void ServerConf::setCmds(size_t val)
+{
+    cmbs = val;
+}
 
 
 
 void ServerConf::parseServer(const std::vector<std::string> &tokens, size_t& i, ServerConf& server)
 {
-    int s = 0;
+
     while(i < tokens.size() && tokens[i] != "}")
     {
         std::string token = tokens[i];
@@ -51,19 +56,30 @@ void ServerConf::parseServer(const std::vector<std::string> &tokens, size_t& i, 
             if(tokens[i] != ";") throw std::runtime_error("Missing ; after listen");
             server.listen.push_back(parseListenValue(value));
         }
-        else if(token == "root") server.root = parseSingleValue(tokens, i);
-        else if (token == "index") server.index = parseSingleValue(tokens, i);
-        else if (token == "client_max_body_size") server.cmbs = parseSize(tokens, i);
+        else if(token == "root")
+        {
+            if (!server.root.empty()) 
+                throw std::runtime_error("Duplicate root directive in server block");
+            server.root = parseSingleValue(tokens, i);
+        }
+        else if (token == "index") server.index = parseMultiValue(tokens, i);
+        else if (token == "client_max_body_size") server.setCmds(parseSize(tokens, i));
         else if (token == "error_page") 
         {
             i++;
-            int code = std::atoi(tokens[i].c_str());
-            i++;
+            std::vector<int> codes;
+            while (i + 1 < tokens.size() && tokens[i + 1] != ";")
+            {
+                int code =  parse_http_code(tokens[i]);
+                codes.push_back(code);
+                i++;
+            }
             std::string path = tokens[i++];
-            if (tokens[i++] != ";") throw std::runtime_error("Missing ;");
-            server.error_pages[code] = path;
-            s++;
+            if (tokens[i] != ";") throw std::runtime_error("Missing ;");
+               for (size_t j = 0; j < codes.size(); ++j) server.error_pages[codes[j]] = path;
         }
+        //location
         i++;
     }
+    server.display();
 }

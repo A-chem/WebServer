@@ -42,15 +42,15 @@ bool isValidIPv4(const std::string &ip)
     int count = 0;
 
     while (std::getline(ss, token, '.')) {
-        if (token.empty()) return false;
+        if (token.empty()) return (false);
         for (size_t i = 0; i < token.size(); ++i)
-            if (token[i] < '0' || token[i] > '9') return false;
+            if (token[i] < '0' || token[i] > '9') return (false);
 
         int num = std::atoi(token.c_str());
-        if (num < 0 || num > 255) return false;
+        if (num < 0 || num > 255) return (false);
         count++;
     }
-    return count == 4;
+    return (count == 4);
 }
 
 bool isValidHostname(const std::string &host)
@@ -84,7 +84,7 @@ std::pair<std::string, int> parseListenValue(const std::string &value)
         port = std::atoi(port_str.c_str());
     } else throw std::runtime_error("Listen value must contain ':'");
 
-    if (!isValidIPv4(host) && !isValidHostname(host)) throw std::runtime_error("Invalid host");
+    if (!isValidIPv4(host) || !isValidHostname(host)) throw std::runtime_error("Invalid host");
     if (port <= 0 || port > 65535) throw std::runtime_error("Invalid listen port");
     return std::make_pair(host, port);
 }
@@ -103,6 +103,8 @@ size_t parseSize(const std::vector<std::string> &tokens, size_t &i)
     std::string s = parseSingleValue(tokens, i);
     if (s.empty())
         throw std::runtime_error("Empty size value");
+    if (s[0] == '-')
+        throw std::runtime_error("Negative size is not allowed");
     size_t nbr = 1;
     char c = s[s.length()-1];
 
@@ -119,5 +121,38 @@ size_t parseSize(const std::vector<std::string> &tokens, size_t &i)
             if (!std::isdigit(s[j])) throw std::runtime_error("Invalid size format: " + s);
         size_t val = std::strtoul(s.c_str(), NULL, 10);
         if (val == 0) throw std::runtime_error("Size must be greater than 0");
+        if (val > SIZE_MAX / nbr) throw std::runtime_error("Size too large");
     return (val * nbr);
+}
+
+std::vector<std::string> parseMultiValue(const std::vector<std::string>& tokens, size_t& i)
+{
+    std::vector<std::string> value;
+
+    i++;
+    while (i < tokens.size() && tokens[i] != ";")
+    {
+        value.push_back(tokens[i]);
+        i++;
+    }  
+    if (i >= tokens.size() || tokens[i] != ";") throw std::runtime_error("Missing ; after directive");
+    return (value);
+}
+
+bool is_number(const std::string& s)
+{
+    if (s.empty()) return false;
+    for (size_t i = 0; i < s.size(); ++i) {
+        if (!std::isdigit(s[i]))
+            return false;
+    }
+    return true;
+}
+int parse_http_code(const std::string& s) 
+{
+
+    if (!is_number(s))  throw std::runtime_error("Invalid HTTP code (not a number): " + s);;
+    int code = std::atoi(s.c_str());
+    if (code < 100 || code > 599) throw std::runtime_error("Invalid HTTP code (out of range 100-599): " + s);; 
+    return code;
 }
