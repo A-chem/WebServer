@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Upload Lab - Webserv</title>
+    <link rel="stylesheet" href="/assets/css/style.css">
+    <style>
+        .upload-container {
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 30px;
+            background: #fff;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .file-input-wrapper {
+            margin: 20px 0;
+            padding: 20px;
+            border: 2px dashed #007bff;
+            border-radius: 10px;
+        }
+        .btn-upload {
+            background-color: #28a745;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .btn-upload:hover { background-color: #218838; }
+        .note { font-size: 0.9em; color: #666; margin-top: 15px; }
+    </style>
+</head>
+<body>
+    <div class="upload-container">
+        <h1>📤 File Upload Portal</h1>
+        <p>Use this form to test <strong>POST</strong> requests and file storage.</p>
+        
+        <form action="/uploads" method="POST" enctype="multipart/form-data">
+            <div class="file-input-wrapper">
+                <input type="file" name="filename" id="fileField" required>
+            </div>
+            <button type="submit" class="btn-upload">Upload to Server</button>
+        </form>
+
+        <div class="note">
+            <p><strong>Limit:</strong> Check <code>client_max_body_size</code> in your <code>.conf</code></p>
+            <p>Files will be saved in: <code>www/uploads/</code></
