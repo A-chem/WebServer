@@ -1,5 +1,0 @@
-Hello from File 2!
-This file is used to test if the server can handle 
-multiple files in the same directory listing.
-1234567890
-!@#$%^&*()

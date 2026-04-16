@@ -1,4 +1,0 @@
-This is the content of File 1.
-It is located inside www/sub-folder/.
-Webserv should serve this as 'text/plain'.
-Size check: OK.

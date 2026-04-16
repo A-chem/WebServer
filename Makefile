@@ -1,54 +1,40 @@
-# Program names
-NAME        = webserv
-TEST_CLIENT = test_client
+NAME    = webserv
 
-# Compiler and flags
-CXX         = c++
-CXXFLAGS    = -Wall -Wextra -Werror -std=c++98
+CC      = c++
+CFLAGS  = -Wall -Wextra -std=c++98 -I inc
 
-# Server Source files
-SRCS        = main.cpp \
-              ConfigNode.cpp \
-              Lexer.cpp \
-              Parser.cpp \
-              ConfigValidator.cpp \
-              ConfigLoader.cpp \
-              Utils.cpp \
-              Server.cpp \
-              Request.cpp \
-              Response.cpp
+SRCS    = src/main.cpp \
+          src/config/Lexer.cpp \
+          src/config/Parser.cpp \
+          src/config/ConfigNode.cpp \
+          src/config/ConfigValidator.cpp \
+          src/config/ConfigLoader.cpp \
+          src/utils/Utils.cpp \
+          src/server/Client.cpp \
+          src/server/Socket.cpp \
+          src/server/Epoll.cpp \
+          src/server/Server.cpp \
+          src/server/Request.cpp \
+          src/server/Cgi.cpp \
+          src/server/ErrorPages.cpp \
+          src/server/Response.cpp
 
-# Object files
-OBJS        = $(SRCS:.cpp=.o)
+OBJS    = $(SRCS:.cpp=.o)
 
-# Default rule
 all: $(NAME)
 
-# Compile the main webserv program
 $(NAME): $(OBJS)
-	$(CXX) $(CXXFLAGS) $(OBJS) -o $(NAME)
-	@echo "✅ $(NAME) successfully compiled!"
+	$(CC) $(CFLAGS) $(OBJS) -o $(NAME)
 
-# Compile .cpp to .o
 %.o: %.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
-# Rule to compile your friend's test client (ser.cpp)
-client: ser.cpp
-	$(CXX) $(CXXFLAGS) ser.cpp -o $(TEST_CLIENT)
-	@echo "✅ $(TEST_CLIENT) successfully compiled!"
-
-# Clean object files
 clean:
 	rm -f $(OBJS)
-	@echo "🧹 Object files cleaned."
 
-# Clean objects and executables
 fclean: clean
-	rm -f $(NAME) $(TEST_CLIENT)
-	@echo "🗑️  Executables removed."
+	rm -f $(NAME)
 
-# Recompile everything
 re: fclean all
 
-.PHONY: all clean fclean re client
+.PHONY: all clean fclean re
