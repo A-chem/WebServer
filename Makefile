@@ -9,6 +9,7 @@ SRCS    = src/main.cpp \
           src/config/ConfigNode.cpp \
           src/config/ConfigValidator.cpp \
           src/config/ConfigLoader.cpp \
+          src/config/CGIConfig.cpp \
           src/utils/Utils.cpp \
           src/server/Client.cpp \
           src/server/Socket.cpp \
@@ -16,7 +17,8 @@ SRCS    = src/main.cpp \
           src/server/Server.cpp \
           src/server/Request.cpp \
           src/server/ErrorPages.cpp \
-          src/server/Response.cpp
+          src/server/Response.cpp \
+          src/server/CGI.cpp
 
 OBJS    = $(SRCS:.cpp=.o)
 

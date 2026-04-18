@@ -1,5 +1,8 @@
 #include "Server.hpp"
 #include <sstream>
+#include <cstdlib>
+#include <cctype>
+#include <cerrno>
 
 // normalize the path (hna y9dr ikon path traversal o tssd9 mkhli server yfot root so each .. ghadi nrj3o lor 7ta nwsslo root o n7bsso)
 
@@ -29,6 +32,62 @@ static	std::string normalizePath(const std::string& path) {
 	return result;
 }
 
+static std::string toLower(const std::string& s) {
+	std::string out = s;
+	for (size_t i = 0; i < out.size(); ++i)
+		out[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(out[i])));
+	return out;
+}
+
+static std::string getHeaderInsensitive(const std::map<std::string, std::string>& hdrs, const std::string& key) {
+	std::string wanted = toLower(key);
+	for (std::map<std::string, std::string>::const_iterator it = hdrs.begin(); it != hdrs.end(); ++it) {
+		if (toLower(it->first) == wanted)
+			return it->second;
+	}
+	return "";
+}
+
+static bool decodeChunkedBody(const std::string& data, std::string& decoded, size_t& consumed, bool& invalid) {
+	decoded.clear();
+	consumed = 0;
+	invalid = false;
+
+	size_t pos = 0;
+	while (true) {
+		size_t line_end = data.find("\r\n", pos);
+		if (line_end == std::string::npos) return false;
+
+		std::string len_str = data.substr(pos, line_end - pos);
+		size_t semi = len_str.find(';');
+		if (semi != std::string::npos) len_str = len_str.substr(0, semi);
+		if (len_str.empty()) { invalid = true; return false; }
+
+		char* endptr = NULL;
+		errno = 0;
+		unsigned long chunk_len = std::strtoul(len_str.c_str(), &endptr, 16);
+		if (!endptr || *endptr != '\0' || errno == ERANGE) { invalid = true; return false; }
+
+		pos = line_end + 2;
+		if (chunk_len == 0) {
+			if (data.size() >= pos + 2 && data.substr(pos, 2) == "\r\n") {
+				consumed = pos + 2;
+				return true;
+			}
+			size_t trailer_end = data.find("\r\n\r\n", pos);
+			if (trailer_end == std::string::npos) return false;
+			consumed = trailer_end + 4;
+			return true;
+		}
+		if (data.size() < pos + chunk_len + 2) return false;
+
+		decoded.append(data, pos, chunk_len);
+		pos += chunk_len;
+		if (data.substr(pos, 2) != "\r\n") { invalid = true; return false; }
+		pos += 2;
+	}
+}
+
 // request line (awel line mn  request )
 
 static	size_t parseRequestLine(Client& c) {
@@ -54,14 +113,15 @@ static	size_t parseRequestLine(Client& c) {
 	size_t qmark = rawpath.find('?');
 	if (qmark != std::string::npos) {
 		path = rawpath.substr(0, qmark);
-		query = rawpath.substr(qmark);
+		query = rawpath.substr(qmark + 1);
 	}
 
 	std::string safe = normalizePath(path);
 	if (safe.empty()) return std::string::npos;
 
 	c.setMethod(method);
-	c.setPath(safe + query);
+	c.setPath(safe);
+	c.setQuery(query);
 	c.setVersion(version);
 	return crlf + 2;
 }
@@ -129,7 +189,7 @@ void	Server::handleRequest(int fd) {
 
 			// keep-alive : ida kan HTTP/1.1 rah default hiya n resusiw nfs client ila ida kant connetion:close
 			std::map<std::string, std::string> hdrs = c.getHeader();
-			std::string conn = hdrs.count("Connection") ? hdrs["Connection"] : "";
+			std::string conn = toLower(getHeaderInsensitive(hdrs, "Connection"));
 			if (c.getVersion() == "HTTP/1.1" && conn != "close")
 				c.setKeepAlive(true);
 			else if (conn == "keep-alive")
@@ -137,9 +197,15 @@ void	Server::handleRequest(int fd) {
 			else
 				c.setKeepAlive(false);
 
-			if (hdrs.count("Content-Length")) {
-				size_t cl = static_cast<size_t>(std::atoi(hdrs["Content-Length"].c_str()));
+			std::string transferEncoding = toLower(getHeaderInsensitive(hdrs, "Transfer-Encoding"));
+			if (transferEncoding.find("chunked") != std::string::npos) {
+				c.setChunkedBody(true);
+				c.setState(READ_BODY);
+			}
+			else if (!getHeaderInsensitive(hdrs, "Content-Length").empty()) {
+				size_t cl = static_cast<size_t>(std::atoi(getHeaderInsensitive(hdrs, "Content-Length").c_str()));
 				c.setContentLength(cl);
+				c.setChunkedBody(false);
 
 				ServerConfig& srv = _configs[0];
 				size_t max_body = srv.client_max_body_size;
@@ -171,11 +237,28 @@ void	Server::handleRequest(int fd) {
 					c.setState(PROCESS_REQUEST);
 			} else {
 				c.setContentLength(0);
+				c.setChunkedBody(false);
 				c.setState(PROCESS_REQUEST);
 			}
 		}
 		else if (c.getState() == READ_BODY) {
-			if (c.recvBuf().size() >= c.getContentLength()) {
+			if (c.hasChunkedBody()) {
+				std::string decoded;
+				size_t consumed = 0;
+				bool invalid = false;
+				if (!decodeChunkedBody(c.recvBuf(), decoded, consumed, invalid)) {
+					if (invalid) {
+						c.setErrorCode(400);
+						c.setState(PROCESS_REQUEST);
+					}
+					break;
+				}
+				c.setBody(decoded);
+				c.setContentLength(decoded.size());
+				c.recvBuf().erase(0, consumed);
+				c.setState(PROCESS_REQUEST);
+			}
+			else if (c.recvBuf().size() >= c.getContentLength()) {
 				c.setBody(c.recvBuf().substr(0, c.getContentLength()));
 				c.recvBuf().erase(0, c.getContentLength());
 				c.setState(PROCESS_REQUEST);

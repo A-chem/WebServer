@@ -5,6 +5,7 @@ Client::Client()
 	listen_fd(-1),
 	state(READ_REQUEST_LINE),
 	content_length(0),
+	chunked_body(false),
 	error_code(0),
 	file_size(0),
 	bytes_sent(0),
@@ -17,6 +18,7 @@ Client::Client(int fd)
 	listen_fd(-1),
 	state(READ_REQUEST_LINE),
 	content_length(0),
+	chunked_body(false),
 	error_code(0),
 	file_size(0),
 	bytes_sent(0),
@@ -34,10 +36,12 @@ void	Client::reset() {
 	state	= READ_REQUEST_LINE;
 	method.clear();
 	path.clear();
+	query.clear();
 	version.clear();
 	header.clear();
 	body.clear();
 	content_length = 0;
+	chunked_body = false;
 	error_code	= 0;
 	file_size	= 0;
 	bytes_sent	= 0;
@@ -63,10 +67,14 @@ bool	Client::requestComplete() const {
 
 void	Client::setMethod(std::string m)		{method = m;}
 void	Client::setPath(std::string p)			{path = p;}
+void	Client::setQuery(std::string q)			{query = q;}
 void	Client::setVersion(std::string v)		{version = v;}
 void	Client::setHeader(std::string key, std::string value)	{header[key] = value; }
 void	Client::setBody(const std::string& b)		{body = b;}
 void	Client::setContentLength(size_t cl)		{content_length = cl;}
+void	Client::setChunkedBody(bool chunked)		{chunked_body = chunked;}
+void	Client::setRemoteAddr(const std::string& addr)	{remote_addr = addr;}
+void	Client::setRemotePort(const std::string& port)	{remote_port = port;}
 void	Client::setErrorCode(int code)			{error_code = code;}
 void	Client::setKeepAlive(bool ka)			{keep_alive = ka;}
 
@@ -75,10 +83,14 @@ void	Client::setKeepAlive(bool ka)			{keep_alive = ka;}
 
 std::string                         Client::getMethod()        const { return method; }
 std::string                         Client::getPath()          const { return path; }
+std::string                         Client::getQuery()         const { return query; }
 std::string                         Client::getVersion()       const { return version; }
 std::map<std::string, std::string>  Client::getHeader()        const { return header; }
 std::string                         Client::getBody()          const { return body; }
 size_t                              Client::getContentLength() const { return content_length; }
+bool                                Client::hasChunkedBody()   const { return chunked_body; }
+std::string                         Client::getRemoteAddr()    const { return remote_addr; }
+std::string                         Client::getRemotePort()    const { return remote_port; }
 int                                 Client::getErrorCode()     const { return error_code; }
 bool                                Client::isKeepAlive()      const { return keep_alive; }
 

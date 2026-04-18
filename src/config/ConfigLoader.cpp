@@ -53,6 +53,9 @@ void	ConfigLoader::loadServer(ConfigNode* node, ServerConfig& conf) {
 			int code = std::atoi(child->args[0].c_str());
 			conf.error_pages[code] = child->args[1];
 		}
+		else if (child->name == "cgi") {
+			conf.cgi.parseDirective(child->args);
+		}
 		else if (child->name == "root") serverRoot = child->args[0];
 		else if (child->name == "index") serverIndex = child->args[0];
 	}
@@ -66,6 +69,7 @@ void	ConfigLoader::loadServer(ConfigNode* node, ServerConfig& conf) {
 	defaultLoc.index = serverIndex;
 	defaultLoc.client_max_body_size = conf.client_max_body_size;
 	defaultLoc.error_pages = conf.error_pages;
+	defaultLoc.cgi = conf.cgi;
 
 	// start load the location config here and pass what can inherit from the parent node (in this case root) but conf is gonna be used inside loadlocation too 
 	for (size_t i = 0; i < node->children.size(); i++) {
@@ -89,6 +93,7 @@ void	ConfigLoader::loadLocation(ConfigNode* node, LocationConfig parent, std::ve
 	else if (child->name == "client_max_body_size") loc.client_max_body_size = parseSize(child->args[0]);
 	else if (child->name == "return") loc.return_url = std::make_pair(std::atoi(child->args[0].c_str()), child->args[1]);
 	else if (child->name == "cgi_pass") loc.cgi_pass = child->args[0];
+	else if (child->name == "cgi") loc.cgi.parseDirective(child->args);
 	else if (child->name == "upload_store") loc.upload_store = child->args[0];
 	else if (child->name == "limit_except") { loc.allowed_methods = child->args; }
 	else if (child->name == "location") { loadLocation(child, loc, list);}
