@@ -254,15 +254,19 @@ serve_file:
 		cgi->setRequestMethod(c.getMethod());
 		cgi->setContentLength(c.getContentLength());
 		cgi->setBody(c.getBody());
-		std::map<std::string, std::string>& hdrs = c.getHeaderRef();
-		for (std::map<std::string, std::string>::const_iterator it = hdrs.begin(); it != hdrs.end(); ++it)
+		std::map<std::string, std::string>& headers = c.getHeaderRef();
+		std::string hostHeader;
+		for (std::map<std::string, std::string>::const_iterator it = headers.begin(); it != headers.end(); ++it) {
 			cgi->addHeader(it->first, it->second);
-		if (hdrs.count("Content-Type"))
-			cgi->setContentType(hdrs["Content-Type"]);
-		std::string hostName;
-		std::string hostPort;
-		parseHostHeader(hdrs.count("Host") ? hdrs["Host"] : "", hostName, hostPort);
-		cgi->setServerInfo(hostName, hostPort);
+			if (it->first == "Content-Type")
+				cgi->setContentType(it->second);
+			else if (it->first == "Host")
+				hostHeader = it->second;
+		}
+		std::string serverName;
+		std::string serverPort;
+		parseHostHeader(hostHeader, serverName, serverPort);
+		cgi->setServerInfo(serverName, serverPort);
 		cgi->setClientInfo("127.0.0.1", "0");
 		if (!cgi->initialize(physical, uriPath, query, cgiBin, loc->root)) {
 			delete cgi;

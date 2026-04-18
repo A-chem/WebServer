@@ -22,6 +22,8 @@ static std::string toUpperHeaderName(const std::string& key) {
 	return out;
 }
 
+static const int CGI_TIMEOUT_SECONDS = 5;
+
 static std::string getDefaultCgiBin(const std::string& ext) {
 	if (ext == ".php") return "/usr/bin/php-cgi";
 	if (ext == ".py") return "/usr/bin/python3";
@@ -102,6 +104,7 @@ bool Cgi::buildEnv(std::vector<std::string>& envStore, const std::string& absScr
 
 	for (std::map<std::string, std::string>::const_iterator it = _headers.begin(); it != _headers.end(); ++it) {
 		std::string key = toUpperHeaderName(it->first);
+		// Body is already de-chunked before CGI execution, so this header must not propagate.
 		if (key == "CONTENT_LENGTH" || key == "CONTENT_TYPE" || key == "TRANSFER_ENCODING")
 			continue;
 		envMap["HTTP_" + key] = it->second;
@@ -160,9 +163,13 @@ bool Cgi::initialize(const std::string& scriptPath, const std::string& scriptUri
 		buildEnv(envStore, absScriptPath);
 		std::vector<char*> envp;
 		for (size_t i = 0; i < envStore.size(); ++i) {
-			char* dup = strdup(envStore[i].c_str());
-			if (!dup) _exit(1);
-			envp.push_back(dup);
+			char* envDup = strdup(envStore[i].c_str());
+			if (!envDup) {
+				for (size_t j = 0; j < envp.size(); ++j)
+					free(envp[j]);
+				_exit(1);
+			}
+			envp.push_back(envDup);
 		}
 		envp.push_back(NULL);
 
@@ -172,7 +179,13 @@ bool Cgi::initialize(const std::string& scriptPath, const std::string& scriptUri
 		argv[0] = arg0;
 		argv[1] = arg1;
 		argv[2] = NULL;
-		if (!arg0 || !arg1) _exit(1);
+		if (!arg0 || !arg1) {
+			free(arg0);
+			free(arg1);
+			for (size_t i = 0; i < envp.size(); ++i)
+				free(envp[i]);
+			_exit(1);
+		}
 		execve(_cgiBin.c_str(), argv, &envp[0]);
 
 		free(arg0);
@@ -276,7 +289,7 @@ bool Cgi::readOutput() {
 
 bool Cgi::hasTimedOut() const {
 	if (_startTime == 0) return false;
-	return (time(NULL) - _startTime) > 5;
+	return (time(NULL) - _startTime) > CGI_TIMEOUT_SECONDS;
 }
 
 void Cgi::terminate() {
