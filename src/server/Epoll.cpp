@@ -50,8 +50,9 @@ void	Server::eventLoop() {
 				Client& c = *clients[fd];
 				if (c.getState() < PROCESS_REQUEST)
 					handleRequest(fd);
-				if (c.getState() == WRITE_RESPONSE)
-						handleResponse(fd);
+				if (c.getState() == CGI_INIT || c.getState() == CGI_EXEC
+					|| c.getState() == CGI_WAIT || c.getState() == WRITE_RESPONSE)
+					handleResponse(fd);
 				if (c.getState() == CLOSED)
 					disconnect(fd);
 			}

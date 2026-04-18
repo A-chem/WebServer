@@ -1,4 +1,5 @@
 #include "Server.hpp"
+#include "Cgi.hpp"
 #include <sstream>
 #include <dirent.h>
 
@@ -30,6 +31,19 @@ static void splitUri(const std::string& uri, std::string& pathOnly, std::string&
 	}
 	pathOnly = uri.substr(0, q);
 	query = uri.substr(q + 1);
+}
+
+static void parseHostHeader(const std::string& host, std::string& name, std::string& port) {
+	name = "localhost";
+	port = "80";
+	if (host.empty()) return;
+	size_t colon = host.rfind(':');
+	if (colon != std::string::npos && colon + 1 < host.size()) {
+		name = host.substr(0, colon);
+		port = host.substr(colon + 1);
+	} else {
+		name = host;
+	}
 }
 
 static LocationConfig* matchLocation(ServerConfig& srv, const std::string& uri) {
@@ -236,10 +250,29 @@ serve_file:
 
 	std::string cgiBin;
 	if ((c.getMethod() == "GET" || c.getMethod() == "POST") && resolveCgiInterpreter(*loc, physical, cgiBin)) {
-		if (!executeCgi(c, physical, uriPath, query, cgiBin, loc->root)) {
+		Cgi* cgi = new Cgi();
+		cgi->setRequestMethod(c.getMethod());
+		cgi->setContentLength(c.getContentLength());
+		cgi->setBody(c.getBody());
+		std::map<std::string, std::string>& hdrs = c.getHeaderRef();
+		for (std::map<std::string, std::string>::const_iterator it = hdrs.begin(); it != hdrs.end(); ++it)
+			cgi->addHeader(it->first, it->second);
+		if (hdrs.count("Content-Type"))
+			cgi->setContentType(hdrs["Content-Type"]);
+		std::string hostName;
+		std::string hostPort;
+		parseHostHeader(hdrs.count("Host") ? hdrs["Host"] : "", hostName, hostPort);
+		cgi->setServerInfo(hostName, hostPort);
+		cgi->setClientInfo("127.0.0.1", "0");
+		if (!cgi->initialize(physical, uriPath, query, cgiBin, loc->root)) {
+			delete cgi;
 			c.sendBuf() = buildErrorResponse(500, "Internal Server Error", srv);
 			c.setFileSize(c.sendBuf().size());
+			return;
 		}
+		c.clearCgi();
+		c.setCgi(cgi);
+		c.setState(CGI_INIT);
 		return;
 	}
 
@@ -294,6 +327,64 @@ void Server::handleResponse(int fd) {
    
     
     Client& c = *clients[fd];
+
+	if (c.getState() == CGI_INIT) {
+		c.setState(CGI_EXEC);
+		return;
+	}
+	if (c.getState() == CGI_EXEC) {
+		Cgi* cgi = c.getCgi();
+		if (cgi == NULL) {
+			c.sendBuf() = buildErrorResponse(500, "Internal Server Error",
+				selectServer(_configs, _fd_to_config, c.getListenFd()));
+			c.setFileSize(c.sendBuf().size());
+			c.setState(WRITE_RESPONSE);
+		} else if (cgi->sendBody()) {
+			c.setState(CGI_WAIT);
+		}
+		return;
+	}
+	if (c.getState() == CGI_WAIT) {
+		Cgi* cgi = c.getCgi();
+		ServerConfig& srv = selectServer(_configs, _fd_to_config, c.getListenFd());
+		if (cgi == NULL) {
+			c.sendBuf() = buildErrorResponse(500, "Internal Server Error", srv);
+			c.setFileSize(c.sendBuf().size());
+			c.setState(WRITE_RESPONSE);
+		} else if (cgi->hasTimedOut()) {
+			cgi->terminate();
+			c.clearCgi();
+			c.sendBuf() = buildErrorResponse(504, "Gateway Timeout", srv);
+			c.setFileSize(c.sendBuf().size());
+			c.setState(WRITE_RESPONSE);
+		} else if (cgi->readOutput()) {
+			int code = 200;
+			std::string reason = "OK";
+			std::string contentType = "text/html";
+			std::string body;
+			std::vector<std::string> extraHeaders;
+			if (Cgi::parseResponse(cgi->getOutput(), code, reason, contentType, body, extraHeaders)) {
+				std::ostringstream oss;
+				oss << "HTTP/1.1 " << code << " " << reason << "\r\n";
+				oss << "Server: Webserv/1.0\r\n";
+				oss << "Content-Type: " << contentType << "\r\n";
+				oss << "Content-Length: " << body.size() << "\r\n";
+				for (size_t i = 0; i < extraHeaders.size(); ++i)
+					oss << extraHeaders[i] << "\r\n";
+				oss << "Connection: " << (c.isKeepAlive() ? "keep-alive" : "close") << "\r\n\r\n";
+				oss << body;
+				c.sendBuf() = oss.str();
+				c.setFileSize(c.sendBuf().size());
+			} else {
+				c.sendBuf() = buildErrorResponse(500, "Internal Server Error", srv);
+				c.setFileSize(c.sendBuf().size());
+			}
+			c.clearCgi();
+			c.setState(WRITE_RESPONSE);
+		}
+		if (c.getState() != WRITE_RESPONSE)
+			return;
+	}
     char chunk[8192];
 
     // Phase 1: send headers (and full body for non-file responses)

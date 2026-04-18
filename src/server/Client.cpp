@@ -1,4 +1,5 @@
 #include "Server.hpp"
+#include "Cgi.hpp"
 
 Client::Client()
 	: fd(-1),
@@ -10,10 +11,7 @@ Client::Client()
 	bytes_sent(0),
 	header_sent(false),
 	keep_alive(false),
-	cgi_pid(-1),
-	cgi_out_fd(-1),
-	cgi_in_fd(-1),
-	cgi_body_sent(-1)
+	cgi(NULL)
 {}
 
 Client::Client(int fd)
@@ -26,13 +24,12 @@ Client::Client(int fd)
 	bytes_sent(0),
 	header_sent(false),
 	keep_alive(false),
-	cgi_pid(-1),
-	cgi_out_fd(-1),
-	cgi_in_fd(-1),
-	cgi_body_sent(-1)
+	cgi(NULL)
 {}
 
-Client::~Client() {}
+Client::~Client() {
+	clearCgi();
+}
 
 // reset all per-request fields for keep-alive reuse
 
@@ -52,6 +49,7 @@ void	Client::reset() {
 	header_sent	= false;
 	if (file_stream.is_open())
 		file_stream.close();
+	clearCgi();
 }
 
 // state and buffer
@@ -85,6 +83,8 @@ std::string                         Client::getMethod()        const { return me
 std::string                         Client::getPath()          const { return path; }
 std::string                         Client::getVersion()       const { return version; }
 std::map<std::string, std::string>  Client::getHeader()        const { return header; }
+std::map<std::string, std::string>& Client::getHeaderRef()           { return header; }
+void                                Client::removeHeader(const std::string& key) { header.erase(key); }
 std::string                         Client::getBody()          const { return body; }
 size_t                              Client::getContentLength() const { return content_length; }
 int                                 Client::getErrorCode()     const { return error_code; }
@@ -109,3 +109,12 @@ bool    Client::headerSent()           { return header_sent; }
 void    Client::setBytesSent(size_t n) { bytes_sent += n; }
 size_t  Client::getBytesSent()   const { return bytes_sent; }
 size_t  Client::getFileSize()    const { return file_size; }
+
+Cgi*	Client::getCgi() { return cgi; }
+void	Client::setCgi(Cgi* c) { cgi = c; }
+void	Client::clearCgi() {
+	if (cgi != NULL) {
+		delete cgi;
+		cgi = NULL;
+	}
+}
