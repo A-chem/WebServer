@@ -15,6 +15,9 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+static const int CGI_TIMEOUT_SECONDS = 10;
+static const size_t CGI_READ_BUFFER_SIZE = 4096;
+
 static std::string toLower(const std::string& s) {
     std::string out = s;
     for (size_t i = 0; i < out.size(); ++i) {
@@ -386,7 +389,7 @@ bool CgiHandler::execute(Client& client,
         }
 
         struct timeval tv;
-        tv.tv_sec = 10;
+        tv.tv_sec = CGI_TIMEOUT_SECONDS;
         tv.tv_usec = 0;
 
         int sel = select(maxfd + 1, &readfds, &writefds, NULL, &tv);
@@ -425,7 +428,7 @@ bool CgiHandler::execute(Client& client,
         }
 
         if (stdout_open && FD_ISSET(_stdout_pipe[0], &readfds)) {
-            char buf[4096];
+            char buf[CGI_READ_BUFFER_SIZE];
             ssize_t n = read(_stdout_pipe[0], buf, sizeof(buf));
             if (n > 0) {
                 _cgi_output.append(buf, static_cast<size_t>(n));
