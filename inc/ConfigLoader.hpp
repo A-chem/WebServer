@@ -29,6 +29,7 @@ struct	ServerConfig {
 	std::vector<std::string>			server_names;
 	size_t						client_max_body_size;
 	std::map<int, std::string>			error_pages;
+	std::map<std::string, std::string>		cgi_handlers;
 	std::vector<LocationConfig>			locations;
 
 	ServerConfig() : host("0.0.0.0"), port(80), client_max_body_size(0) {}

@@ -53,6 +53,9 @@ void	ConfigLoader::loadServer(ConfigNode* node, ServerConfig& conf) {
 			int code = std::atoi(child->args[0].c_str());
 			conf.error_pages[code] = child->args[1];
 		}
+		else if (child->name == "cgi") {
+			conf.cgi_handlers[child->args[0]] = child->args[1];
+		}
 		else if (child->name == "root") serverRoot = child->args[0];
 		else if (child->name == "index") serverIndex = child->args[0];
 	}

@@ -55,6 +55,7 @@ g++ -Wall -Wextra -std=c++98 -I inc \
     src/server/Epoll.cpp \
     src/server/Server.cpp \
     src/server/Request.cpp \
+    src/server/Cgi.cpp \
     src/server/ErrorPages.cpp \
     src/server/Response.cpp \
     -o webserv
@@ -121,6 +122,13 @@ curl -v -X POST http://localhost:8080/upload \
     -H "Content-Disposition: attachment; filename=\"myfile.txt\"" \
     --data "named upload content"
 # check uploads/myfile.txt
+```
+
+### CGI (Python)
+```bash
+curl -v "http://localhost:8080/cgi/test.py?name=value&foo=bar"
+curl -v -X POST "http://localhost:8080/cgi/test.py" --data "hello=world"
+curl -v "http://localhost:8080/cgi/status.py"
 ```
 
 ### DELETE — File deletion
