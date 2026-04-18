@@ -1,0 +1,1 @@
+#ifndef CGI_HPP\n#define CGI_HPP\n\nclass CGI {\npublic:\n    CGI();\n    ~CGI();\n    void execute();\n};\n\n#endif // CGI_HPP
