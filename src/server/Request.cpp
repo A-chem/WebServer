@@ -2,6 +2,7 @@
 #include <sstream>
 #include <cstdlib>
 #include <cctype>
+#include <cerrno>
 
 // normalize the path (hna y9dr ikon path traversal o tssd9 mkhli server yfot root so each .. ghadi nrj3o lor 7ta nwsslo root o n7bsso)
 
@@ -34,7 +35,7 @@ static	std::string normalizePath(const std::string& path) {
 static std::string toLower(const std::string& s) {
 	std::string out = s;
 	for (size_t i = 0; i < out.size(); ++i)
-		out[i] = static_cast<char>(std::tolower(out[i]));
+		out[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(out[i])));
 	return out;
 }
 
@@ -63,8 +64,9 @@ static bool decodeChunkedBody(const std::string& data, std::string& decoded, siz
 		if (len_str.empty()) { invalid = true; return false; }
 
 		char* endptr = NULL;
+		errno = 0;
 		unsigned long chunk_len = std::strtoul(len_str.c_str(), &endptr, 16);
-		if (!endptr || *endptr != '\0') { invalid = true; return false; }
+		if (!endptr || *endptr != '\0' || errno == ERANGE) { invalid = true; return false; }
 
 		pos = line_end + 2;
 		if (chunk_len == 0) {

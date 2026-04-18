@@ -32,6 +32,10 @@ if (slash == 0) return "/";
 return path.substr(0, slash);
 }
 
+static bool childExitedWithError(int status, bool hasNoOutput) {
+	return (WIFSIGNALED(status) || (WIFEXITED(status) && WEXITSTATUS(status) != 0 && hasNoOutput));
+}
+
 static std::string absolutePath(const std::string& path) {
 	if (!path.empty() && path[0] == '/') return path;
 	char cwd[4096];
@@ -89,7 +93,7 @@ struct pollfd pfd;
 pfd.fd = _inPipe[1];
 pfd.events = POLLOUT;
 pfd.revents = 0;
-int pr = poll(&pfd, 1, 1000);
+int pr = poll(&pfd, 1, 100);
 if (pr <= 0) return false;
 if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) return false;
 
@@ -114,7 +118,7 @@ struct pollfd pfd;
 pfd.fd = _outPipe[0];
 pfd.events = POLLIN | POLLHUP;
 pfd.revents = 0;
-int pr = poll(&pfd, 1, 1000);
+int pr = poll(&pfd, 1, 100);
 if (pr < 0) return false;
 
 if (pr > 0 && (pfd.revents & POLLIN)) {
@@ -129,16 +133,14 @@ if (pr > 0 && (pfd.revents & (POLLHUP | POLLERR | POLLNVAL))) outClosed = true;
 			pid_t w = waitpid(_pid, &childStatus, WNOHANG);
 			if (w == _pid) {
 				childExited = true;
-				if (WIFSIGNALED(childStatus)) return false;
-				if (WIFEXITED(childStatus) && WEXITSTATUS(childStatus) != 0 && _output.empty()) return false;
+				if (childExitedWithError(childStatus, _output.empty())) return false;
 			}
 		}
 
 		if (outClosed && !childExited && _pid > 0) {
 			waitpid(_pid, &childStatus, 0);
 			childExited = true;
-			if (WIFSIGNALED(childStatus)) return false;
-			if (WIFEXITED(childStatus) && WEXITSTATUS(childStatus) != 0 && _output.empty()) return false;
+			if (childExitedWithError(childStatus, _output.empty())) return false;
 		}
 }
 return true;
@@ -244,7 +246,8 @@ closeFd(_inPipe[0]);
 closeFd(_inPipe[1]);
 closeFd(_outPipe[0]);
 closeFd(_outPipe[1]);
-		chdir(dirnameOf(absScript).c_str());
+		if (chdir(dirnameOf(absScript).c_str()) != 0)
+			_exit(126);
 
 std::vector<std::string> envs;
 envs.push_back("GATEWAY_INTERFACE=CGI/1.1");

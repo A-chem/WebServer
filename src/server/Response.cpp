@@ -75,7 +75,7 @@ static bool resolveCgi(LocationConfig* loc,
 
 static	std::string buildAutoindex(const std::string& uri, const std::string& dir_path) {
 	std::ostringstream html;
-	html << "<!DOCKTYPE html>\n<html><head><title>Index of " << uri << "</title></head>\n"
+	html << "<!DOCTYPE html>\n<html><head><title>Index of " << uri << "</title></head>\n"
 		<< "<body><h1>Index of " << uri << "</h1><hr><pre>\n";
 
 	DIR* dir = opendir(dir_path.c_str());
