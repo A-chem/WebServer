@@ -88,7 +88,12 @@ void	ConfigLoader::loadLocation(ConfigNode* node, LocationConfig parent, std::ve
 	else if (child->name == "autoindex") loc.autoindex = (child->args[0] == "on");
 	else if (child->name == "client_max_body_size") loc.client_max_body_size = parseSize(child->args[0]);
 	else if (child->name == "return") loc.return_url = std::make_pair(std::atoi(child->args[0].c_str()), child->args[1]);
-	else if (child->name == "cgi_pass") loc.cgi_pass = child->args[0];
+	else if (child->name == "cgi_pass") {
+		if (child->args.size() == 2)
+			loc.cgi_pass[child->args[0]] = child->args[1];
+		else
+			loc.cgi_pass["*"] = child->args[0];
+	}
 	else if (child->name == "upload_store") loc.upload_store = child->args[0];
 	else if (child->name == "limit_except") { loc.allowed_methods = child->args; }
 	else if (child->name == "location") { loadLocation(child, loc, list);}

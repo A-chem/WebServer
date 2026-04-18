@@ -44,11 +44,15 @@ class	Client {
 		// parsed request (the data came from the client :browser)
 		std::string	method;
 		std::string	path;
+		std::string	query_string;
 		std::string	version;
 		std::map<std::string, std::string> header;
 		std::string	body;
 		size_t		content_length;
+		bool		chunked_body;
 		int		error_code;
+		std::string	remote_addr;
+		std::string	remote_port;
 
 		// Response streaming
 		size_t	file_size;
@@ -81,22 +85,30 @@ class	Client {
 		// request setters
 		void	setMethod(std::string m);
 		void	setPath(std::string p);
+		void	setQueryString(std::string q);
 		void	setVersion(std::string v);
 		void	setHeader(std::string key, std::string value);
 		void	setBody(const std::string& b);
 		void	setContentLength(size_t cl);
+		void	setChunkedBody(bool chunked);
 		void	setErrorCode(int code);
 		void	setKeepAlive(bool ka);
+		void	setRemoteAddr(const std::string& addr);
+		void	setRemotePort(const std::string& port);
 
 		// request getters
 		std::string				getMethod()	const;
 		std::string				getPath()	const;
+		std::string				getQueryString() const;
 		std::string				getVersion()	const;
 		std::map<std::string, std::string>	getHeader()	const;
 		std::string				getBody()	const;
 		size_t					getContentLength() const;
+		bool					isChunkedBody() const;
 		int					getErrorCode()	const;
 		bool					isKeepAlive()	const;
+		std::string				getRemoteAddr() const;
+		std::string				getRemotePort() const;
 
 		// response file streaming
 		void		openFile(const std::string& path);
