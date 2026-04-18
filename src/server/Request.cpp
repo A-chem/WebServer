@@ -244,6 +244,10 @@ void	Server::handleRequest(int fd) {
 					break;
 				c.setBody(decoded);
 				c.setContentLength(decoded.size());
+				c.removeHeader("Transfer-Encoding");
+				std::ostringstream len;
+				len << decoded.size();
+				c.setHeader("Content-Length", len.str());
 				c.recvBuf().erase(0, consumed);
 				c.setState(PROCESS_REQUEST);
 			}
@@ -258,8 +262,11 @@ void	Server::handleRequest(int fd) {
 		}
 		else if (c.getState() == PROCESS_REQUEST) {
 			buildResponse(c);
-			c.setState(WRITE_RESPONSE);
-			modifyEpoll(fd, EPOLLOUT);
+			if (c.getState() == PROCESS_REQUEST)
+				c.setState(WRITE_RESPONSE);
+			if (c.getState() == WRITE_RESPONSE || c.getState() == CGI_INIT
+				|| c.getState() == CGI_EXEC || c.getState() == CGI_WAIT)
+				modifyEpoll(fd, EPOLLOUT);
 			break;
 		}
 		else { break; }

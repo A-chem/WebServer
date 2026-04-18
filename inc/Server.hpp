@@ -36,6 +36,8 @@ enum State {
 	CLOSED
 };
 
+class Cgi;
+
 
 
 class	Client {
@@ -61,12 +63,7 @@ class	Client {
 		bool	header_sent;
 		bool	keep_alive;
 
-		//cgi
-		int         cgi_pid;       
-		int         cgi_out_fd;   
-		int         cgi_in_fd;      
-		std::string cgi_output;   
-		size_t      cgi_body_sent;  
+		Cgi*		cgi;
 
 	public:
 		std::ifstream	file_stream;
@@ -105,6 +102,8 @@ class	Client {
 		std::string				getPath()	const;
 		std::string				getVersion()	const;
 		std::map<std::string, std::string>	getHeader()	const;
+		std::map<std::string, std::string>&	getHeaderRef();
+		void					removeHeader(const std::string& key);
 		std::string				getBody()	const;
 		size_t					getContentLength() const;
 		int					getErrorCode()	const;
@@ -119,6 +118,10 @@ class	Client {
 		bool		headerSent();
 		size_t		getBytesSent() const;
 		size_t		getFileSize() const;
+
+		Cgi*		getCgi();
+		void		setCgi(Cgi* c);
+		void		clearCgi();
 };
 
 
@@ -150,7 +153,6 @@ class Server {
 		void	buildResponse(Client& c);
 		void	handleResponse(int fd);
 		bool	resolveCgiInterpreter(const LocationConfig& loc, const std::string& path, std::string& cgiBin) const;
-		bool	executeCgi(Client& c, const std::string& scriptPath, const std::string& scriptUri, const std::string& query, const std::string& cgiBin, const std::string& docRoot);
 
 		// ErrorPages.cpp
 		std::string defaultErrorPage(int code, const std::string& msg);
