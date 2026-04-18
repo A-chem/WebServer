@@ -13,6 +13,8 @@
 #include <vector>
 #include <signal.h>
 
+static const int kCgiTimeoutSeconds = 10;
+
 static std::string toStringInt(int value) {
 	std::ostringstream oss;
 	oss << value;
@@ -243,6 +245,8 @@ bool CGI::execute(CGIResult& result, std::string& error) const {
 			};
 			execve(_script_path.c_str(), argv, envp);
 		}
+		const char execFailMsg[] = "webserv: execve failed for CGI script\n";
+		write(STDERR_FILENO, execFailMsg, sizeof(execFailMsg) - 1);
 		_exit(1);
 	}
 
@@ -258,7 +262,6 @@ bool CGI::execute(CGIResult& result, std::string& error) const {
 	bool outputEof = false;
 	int status = 0;
 	time_t started = time(NULL);
-	const int timeoutSec = 10;
 
 	while (true) {
 		if (toChild[1] != -1) {
@@ -301,7 +304,7 @@ bool CGI::execute(CGIResult& result, std::string& error) const {
 		if (childExited && (fromChild[0] == -1 || outputEof))
 			break;
 
-		if (time(NULL) - started >= timeoutSec) {
+		if (time(NULL) - started >= kCgiTimeoutSeconds) {
 			kill(pid, SIGKILL);
 			waitpid(pid, &status, 0);
 			closeIfOpen(toChild[1]);
@@ -338,8 +341,12 @@ bool CGI::execute(CGIResult& result, std::string& error) const {
 	for (size_t i = 0; i < envStorage.size(); ++i) delete [] envp[i];
 	delete [] envp;
 
-	if (!WIFEXITED(status) && !WIFSIGNALED(status)) {
-		error = "CGI process ended abnormally";
+	if (WIFSIGNALED(status)) {
+		error = "CGI process was terminated by signal";
+		return false;
+	}
+	if (WIFEXITED(status) && WEXITSTATUS(status) != 0 && output.empty()) {
+		error = "CGI process exited with failure";
 		return false;
 	}
 	return parseOutput(output, result);

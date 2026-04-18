@@ -3,6 +3,8 @@
 #include <sstream>
 #include <cstdlib>
 
+static const size_t kMaxChunkedBodyBuffer = 50 * 1024 * 1024;
+
 static std::string getHeaderValue(const std::map<std::string, std::string>& headers, const std::string& key) {
 	for (std::map<std::string, std::string>::const_iterator it = headers.begin(); it != headers.end(); ++it) {
 		if (it->first.size() != key.size())
@@ -272,7 +274,7 @@ void	Server::handleRequest(int fd) {
 					c.setChunkedBody(false);
 					c.setState(PROCESS_REQUEST);
 				} else {
-					if (c.recvBuf().size() > 1024 * 1024 * 50) {
+					if (c.recvBuf().size() > kMaxChunkedBodyBuffer) {
 						c.setErrorCode(400);
 						c.setState(PROCESS_REQUEST);
 					}

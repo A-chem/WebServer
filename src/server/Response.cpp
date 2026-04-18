@@ -3,6 +3,7 @@
 #include <sstream>
 #include <dirent.h>
 #include <cctype>
+#include <limits.h>
 
 
 // mime types
@@ -80,7 +81,7 @@ static std::string findCgiExecutable(const LocationConfig& loc, const std::strin
 static std::string toAbsolutePath(const std::string& path) {
 	if (!path.empty() && path[0] == '/')
 		return path;
-	char cwd[4096];
+	char cwd[PATH_MAX];
 	if (getcwd(cwd, sizeof(cwd)) == NULL)
 		return path;
 	std::string abs = cwd;
@@ -262,8 +263,10 @@ void Server::buildResponse(Client& c) {
 
             std::ostringstream oss;
             int statusCode = cgiResult.status_code;
-            if (statusCode < 100 || statusCode > 599)
-                statusCode = 200;
+            if (statusCode < 100 || statusCode > 599) {
+                std::cout << "[CGI] invalid status code from script: " << statusCode << std::endl;
+                statusCode = 500;
+            }
             oss << "HTTP/1.1 " << statusCode << " " << reasonPhrase(statusCode) << "\r\n";
             oss << "Server: Webserv/1.0\r\n";
             for (std::map<std::string, std::string>::const_iterator it = cgiResult.headers.begin();
