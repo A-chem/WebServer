@@ -1,7 +1,5 @@
 #include "Server.hpp"
 #include <sstream>
-#include <sys/wait.h>
-
 
 Server::Server() {
 	epfd = epoll_create1(0);

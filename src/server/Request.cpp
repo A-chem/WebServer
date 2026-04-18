@@ -1,6 +1,5 @@
 #include "Server.hpp"
 #include <sstream>
-#include <cctype>
 
 // normalize the path (hna y9dr ikon path traversal o tssd9 mkhli server yfot root so each .. ghadi nrj3o lor 7ta nwsslo root o n7bsso)
 
@@ -95,62 +94,6 @@ static void parseHeaders(Client& c) {
 	}
 }
 
-static std::string toLowerCopy(const std::string& s) {
-	std::string out = s;
-	for (size_t i = 0; i < out.size(); ++i)
-		out[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(out[i])));
-	return out;
-}
-
-static bool hasChunkedEncoding(const std::map<std::string, std::string>& hdrs) {
-	std::map<std::string, std::string>::const_iterator it = hdrs.find("Transfer-Encoding");
-	if (it == hdrs.end())
-		return false;
-	return toLowerCopy(it->second).find("chunked") != std::string::npos;
-}
-
-static bool decodeChunkedBody(const std::string& in, std::string& out, size_t& consumed) {
-	out.clear();
-	consumed = 0;
-	size_t pos = 0;
-
-	while (true) {
-		size_t lineEnd = in.find("\r\n", pos);
-		if (lineEnd == std::string::npos) return false;
-		std::string sizeLine = in.substr(pos, lineEnd - pos);
-		size_t semi = sizeLine.find(';');
-		if (semi != std::string::npos)
-			sizeLine = sizeLine.substr(0, semi);
-		if (sizeLine.empty()) return false;
-		for (size_t i = 0; i < sizeLine.size(); ++i) {
-			if (!std::isxdigit(static_cast<unsigned char>(sizeLine[i])))
-				return false;
-		}
-
-		size_t chunkSize = static_cast<size_t>(std::strtoul(sizeLine.c_str(), NULL, 16));
-		pos = lineEnd + 2;
-		if (in.size() < pos + chunkSize + 2) return false;
-		out.append(in, pos, chunkSize);
-		pos += chunkSize;
-		if (in.compare(pos, 2, "\r\n") != 0) return false;
-		pos += 2;
-
-		if (chunkSize == 0) {
-			if (in.size() < pos + 2) return false;
-			if (in.compare(pos, 2, "\r\n") != 0) {
-				size_t trailerEnd = in.find("\r\n\r\n", pos);
-				if (trailerEnd == std::string::npos) return false;
-				pos = trailerEnd + 4;
-			}
-			else {
-				pos += 2;
-			}
-			consumed = pos;
-			return true;
-		}
-	}
-}
-
 // handle request 
 
 void	Server::handleRequest(int fd) {
@@ -194,11 +137,7 @@ void	Server::handleRequest(int fd) {
 			else
 				c.setKeepAlive(false);
 
-			if (hasChunkedEncoding(hdrs)) {
-				c.setContentLength(0);
-				c.setState(READ_BODY);
-			}
-			else if (hdrs.count("Content-Length")) {
+			if (hdrs.count("Content-Length")) {
 				size_t cl = static_cast<size_t>(std::atoi(hdrs["Content-Length"].c_str()));
 				c.setContentLength(cl);
 
@@ -236,18 +175,7 @@ void	Server::handleRequest(int fd) {
 			}
 		}
 		else if (c.getState() == READ_BODY) {
-			std::map<std::string, std::string> hdrs = c.getHeader();
-			if (hasChunkedEncoding(hdrs)) {
-				std::string decoded;
-				size_t consumed = 0;
-				if (!decodeChunkedBody(c.recvBuf(), decoded, consumed))
-					break;
-				c.setBody(decoded);
-				c.setContentLength(decoded.size());
-				c.recvBuf().erase(0, consumed);
-				c.setState(PROCESS_REQUEST);
-			}
-			else if (c.recvBuf().size() >= c.getContentLength()) {
+			if (c.recvBuf().size() >= c.getContentLength()) {
 				c.setBody(c.recvBuf().substr(0, c.getContentLength()));
 				c.recvBuf().erase(0, c.getContentLength());
 				c.setState(PROCESS_REQUEST);

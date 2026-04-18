@@ -9,11 +9,7 @@ Client::Client()
 	file_size(0),
 	bytes_sent(0),
 	header_sent(false),
-	keep_alive(false),
-	cgi_pid(-1),
-	cgi_out_fd(-1),
-	cgi_in_fd(-1),
-	cgi_body_sent(-1)
+	keep_alive(false)
 {}
 
 Client::Client(int fd)
@@ -25,11 +21,7 @@ Client::Client(int fd)
 	file_size(0),
 	bytes_sent(0),
 	header_sent(false),
-	keep_alive(false),
-	cgi_pid(-1),
-	cgi_out_fd(-1),
-	cgi_in_fd(-1),
-	cgi_body_sent(-1)
+	keep_alive(false)
 {}
 
 Client::~Client() {}

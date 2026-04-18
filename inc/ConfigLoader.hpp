@@ -15,7 +15,6 @@ struct	LocationConfig {
 	size_t					client_max_body_size;
 	std::pair<int, std::string>		return_url;
 	std::string				cgi_pass;
-	std::string cgi_ext;
 	std::string				upload_store;
 	std::vector<std::string>		allowed_methods;
 	std::map<int, std::string>		error_pages;

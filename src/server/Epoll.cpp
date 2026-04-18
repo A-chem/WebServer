@@ -51,7 +51,7 @@ void	Server::eventLoop() {
 				if (c.getState() < PROCESS_REQUEST)
 					handleRequest(fd);
 				if (c.getState() == WRITE_RESPONSE)
-						handleResponse(fd);
+					handleResponse(fd);
 				if (c.getState() == CLOSED)
 					disconnect(fd);
 			}

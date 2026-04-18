@@ -29,14 +29,9 @@ enum State {
 	READ_REQUEST_HEADER,
 	READ_BODY,
 	PROCESS_REQUEST,
-	CGI_INIT,   
-	CGI_EXEC,  
-	CGI_WAIT,
 	WRITE_RESPONSE,
 	CLOSED
 };
-
-
 
 class	Client {
 	private:
@@ -61,18 +56,11 @@ class	Client {
 		bool	header_sent;
 		bool	keep_alive;
 
-		//cgi
-		int         cgi_pid;       
-		int         cgi_out_fd;   
-		int         cgi_in_fd;      
-		std::string cgi_output;   
-		size_t      cgi_body_sent;  
-
 	public:
 		std::ifstream	file_stream;
 		
 		Client();
-		Client(int fd);
+		explicit Client(int fd);
 		~Client();
 
 		// for re-use the same connection (keep-alive)
@@ -149,8 +137,6 @@ class Server {
 		// Response.cpp
 		void	buildResponse(Client& c);
 		void	handleResponse(int fd);
-		bool	resolveCgiInterpreter(const LocationConfig& loc, const std::string& path, std::string& cgiBin) const;
-		bool	executeCgi(Client& c, const std::string& scriptPath, const std::string& scriptUri, const std::string& query, const std::string& cgiBin, const std::string& docRoot);
 
 		// ErrorPages.cpp
 		std::string defaultErrorPage(int code, const std::string& msg);
