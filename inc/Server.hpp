@@ -44,10 +44,14 @@ class	Client {
 		// parsed request (the data came from the client :browser)
 		std::string	method;
 		std::string	path;
+		std::string	query;
 		std::string	version;
 		std::map<std::string, std::string> header;
 		std::string	body;
 		size_t		content_length;
+		bool		chunked_body;
+		std::string	remote_addr;
+		std::string	remote_port;
 		int		error_code;
 
 		// Response streaming
@@ -81,20 +85,28 @@ class	Client {
 		// request setters
 		void	setMethod(std::string m);
 		void	setPath(std::string p);
+		void	setQuery(std::string q);
 		void	setVersion(std::string v);
 		void	setHeader(std::string key, std::string value);
 		void	setBody(const std::string& b);
 		void	setContentLength(size_t cl);
+		void	setChunkedBody(bool chunked);
+		void	setRemoteAddr(const std::string& addr);
+		void	setRemotePort(const std::string& port);
 		void	setErrorCode(int code);
 		void	setKeepAlive(bool ka);
 
 		// request getters
 		std::string				getMethod()	const;
 		std::string				getPath()	const;
+		std::string				getQuery()	const;
 		std::string				getVersion()	const;
 		std::map<std::string, std::string>	getHeader()	const;
 		std::string				getBody()	const;
 		size_t					getContentLength() const;
+		bool					hasChunkedBody() const;
+		std::string				getRemoteAddr() const;
+		std::string				getRemotePort() const;
 		int					getErrorCode()	const;
 		bool					isKeepAlive()	const;
 

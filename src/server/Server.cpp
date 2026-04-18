@@ -50,7 +50,9 @@ void	Server::setup(const std::vector<ServerConfig>& configs) {
 
 void	Server::acceptClients(int listen_fd) {
 	while (true) {
-		int clientfd = accept(listen_fd, NULL, NULL);
+		struct sockaddr_storage sa;
+		socklen_t slen = sizeof(sa);
+		int clientfd = accept(listen_fd, reinterpret_cast<struct sockaddr*>(&sa), &slen);
 		if (clientfd < 0) {
 			if (errno == EAGAIN || errno == EWOULDBLOCK) break;
 			return ;
@@ -59,6 +61,13 @@ void	Server::acceptClients(int listen_fd) {
 		addToEpoll(clientfd);
 		Client* cl = new Client(clientfd);
 		cl->setListenFd(listen_fd);
+		char host[NI_MAXHOST];
+		char serv[NI_MAXSERV];
+		if (getnameinfo(reinterpret_cast<struct sockaddr*>(&sa), slen,
+			host, sizeof(host), serv, sizeof(serv), NI_NUMERICHOST | NI_NUMERICSERV) == 0) {
+			cl->setRemoteAddr(host);
+			cl->setRemotePort(serv);
+		}
 		clients.insert(std::make_pair(clientfd, cl));
 		std::cout << "[ACCEPT] client fd=" << clientfd << std::endl;
 	}
@@ -71,4 +80,3 @@ void	Server::disconnect(int fd) {
 	clients.erase(fd);
 	std::cout << "[DISCONNECT] fd=" << fd << std::endl;
 }
-

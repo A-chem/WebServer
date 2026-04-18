@@ -1,4 +1,5 @@
 #include "Server.hpp"
+#include "CGI.hpp"
 #include <sstream>
 #include <dirent.h>
 
@@ -53,6 +54,23 @@ static	std::string resolvePath(const std::string& uri, LocationConfig* loc) {
 	if (remain.empty() || remain[0] != '/')
 		remain = "/" + remain;
 	return root + remain;
+}
+
+static bool resolveCgi(LocationConfig* loc,
+	const std::string& uriPath,
+	std::string& scriptUri,
+	std::string& pathInfo,
+	std::string& executable) {
+	if (!loc) return false;
+	if (!loc->cgi.empty() && loc->cgi.resolveScript(uriPath, scriptUri, pathInfo, executable))
+		return true;
+	if (!loc->cgi_pass.empty()) {
+		scriptUri = uriPath;
+		pathInfo = "";
+		executable = loc->cgi_pass;
+		return true;
+	}
+	return false;
 }
 
 static	std::string buildAutoindex(const std::string& uri, const std::string& dir_path) {
@@ -172,6 +190,30 @@ void Server::buildResponse(Client& c) {
     std::string physical = resolvePath(c.getPath(), loc);
     std::cout << "[ROUTE] " << c.getMethod() << " " << c.getPath()
               << " -> " << physical << std::endl;
+
+    // --- CGI ---
+    if (c.getMethod() != "DELETE") {
+        std::string scriptUri;
+        std::string pathInfo;
+        std::string executable;
+        if (resolveCgi(loc, c.getPath(), scriptUri, pathInfo, executable)) {
+            std::string scriptFilename = resolvePath(scriptUri, loc);
+            struct stat cst;
+            if (stat(scriptFilename.c_str(), &cst) != 0 || !S_ISREG(cst.st_mode)) {
+                c.sendBuf() = buildErrorResponse(404, "Not Found", srv);
+            } else {
+                CGI cgi;
+                std::string out;
+                std::string err;
+                if (cgi.execute(c, scriptUri, scriptFilename, pathInfo, executable, out, err))
+                    c.sendBuf() = out;
+                else
+                    c.sendBuf() = buildErrorResponse(500, "Internal Server Error", srv);
+            }
+            c.setFileSize(c.sendBuf().size());
+            return;
+        }
+    }
 
     // --- 3. DELETE ---
     if (c.getMethod() == "DELETE") {
