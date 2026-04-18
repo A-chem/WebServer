@@ -29,6 +29,54 @@ static	std::string normalizePath(const std::string& path) {
 	return result;
 }
 
+static std::string toLowerStr(const std::string& s) {
+	std::string out = s;
+	for (size_t i = 0; i < out.size(); ++i) {
+		if (out[i] >= 'A' && out[i] <= 'Z')
+			out[i] = static_cast<char>(out[i] - 'A' + 'a');
+	}
+	return out;
+}
+
+static bool headerHasChunked(const std::map<std::string, std::string>& hdrs) {
+	for (std::map<std::string, std::string>::const_iterator it = hdrs.begin(); it != hdrs.end(); ++it) {
+		if (toLowerStr(it->first) == "transfer-encoding") {
+			return toLowerStr(it->second).find("chunked") != std::string::npos;
+		}
+	}
+	return false;
+}
+
+static size_t chunkedBodyFrameSize(const std::string& buf) {
+	size_t pos = 0;
+	while (true) {
+		size_t line_end = buf.find("\r\n", pos);
+		if (line_end == std::string::npos) return std::string::npos;
+
+		std::string size_str = buf.substr(pos, line_end - pos);
+		size_t semi = size_str.find(';');
+		if (semi != std::string::npos) size_str = size_str.substr(0, semi);
+		if (size_str.empty()) return 0;
+
+		char* end = NULL;
+		unsigned long sz = std::strtoul(size_str.c_str(), &end, 16);
+		if (!end || *end != '\0') return 0;
+
+		pos = line_end + 2;
+		if (sz == 0) {
+			if (buf.size() >= pos + 2 && buf.compare(pos, 2, "\r\n") == 0)
+				return pos + 2;
+			size_t trailer_end = buf.find("\r\n\r\n", pos);
+			if (trailer_end == std::string::npos) return std::string::npos;
+			return trailer_end + 4;
+		}
+
+		if (buf.size() < pos + sz + 2) return std::string::npos;
+		if (buf.compare(pos + sz, 2, "\r\n") != 0) return 0;
+		pos += sz + 2;
+	}
+}
+
 // request line (awel line mn  request )
 
 static	size_t parseRequestLine(Client& c) {
@@ -168,23 +216,42 @@ void	Server::handleRequest(int fd) {
 				if (cl > 0)
 					c.setState(READ_BODY);
 				else
-					c.setState(PROCESS_REQUEST);
+					c.setState(PROCESS_CGI);
 			} else {
-				c.setContentLength(0);
-				c.setState(PROCESS_REQUEST);
+				if (headerHasChunked(hdrs)) {
+					c.setContentLength(0);
+					c.setState(READ_BODY);
+				} else {
+					c.setContentLength(0);
+					c.setState(PROCESS_CGI);
+				}
 			}
 		}
 		else if (c.getState() == READ_BODY) {
-			if (c.recvBuf().size() >= c.getContentLength()) {
-				c.setBody(c.recvBuf().substr(0, c.getContentLength()));
-				c.recvBuf().erase(0, c.getContentLength());
-				c.setState(PROCESS_REQUEST);
-			}
-			else {
-				break;
+			std::map<std::string, std::string> hdrs = c.getHeader();
+			if (headerHasChunked(hdrs)) {
+				size_t frame_size = chunkedBodyFrameSize(c.recvBuf());
+				if (frame_size == 0) {
+					c.setErrorCode(400);
+					c.setState(PROCESS_CGI);
+					break;
+				}
+				if (frame_size == std::string::npos) break;
+				c.setBody(c.recvBuf().substr(0, frame_size));
+				c.recvBuf().erase(0, frame_size);
+				c.setState(PROCESS_CGI);
+			} else {
+				if (c.recvBuf().size() >= c.getContentLength()) {
+					c.setBody(c.recvBuf().substr(0, c.getContentLength()));
+					c.recvBuf().erase(0, c.getContentLength());
+					c.setState(PROCESS_CGI);
+				}
+				else {
+					break;
+				}
 			}
 		}
-		else if (c.getState() == PROCESS_REQUEST) {
+		else if (c.getState() == PROCESS_CGI || c.getState() == PROCESS_REQUEST) {
 			buildResponse(c);
 			c.setState(WRITE_RESPONSE);
 			modifyEpoll(fd, EPOLLOUT);

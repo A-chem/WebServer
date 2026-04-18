@@ -1,4 +1,5 @@
 #include "Server.hpp"
+#include "Cgi.hpp"
 #include <sstream>
 #include <dirent.h>
 
@@ -53,6 +54,20 @@ static	std::string resolvePath(const std::string& uri, LocationConfig* loc) {
 	if (remain.empty() || remain[0] != '/')
 		remain = "/" + remain;
 	return root + remain;
+}
+
+static std::string pathWithoutQuery(const std::string& uri) {
+	size_t q = uri.find('?');
+	if (q == std::string::npos) return uri;
+	return uri.substr(0, q);
+}
+
+static std::string getExtension(const std::string& path) {
+	size_t slash = path.rfind('/');
+	size_t dot = path.rfind('.');
+	if (dot == std::string::npos) return "";
+	if (slash != std::string::npos && dot < slash) return "";
+	return path.substr(dot);
 }
 
 static	std::string buildAutoindex(const std::string& uri, const std::string& dir_path) {
@@ -133,7 +148,9 @@ void Server::buildResponse(Client& c) {
         return;
     }
 
-    LocationConfig* loc = matchLocation(srv, c.getPath());
+    std::string request_uri = c.getPath();
+    std::string uri_path = pathWithoutQuery(request_uri);
+    LocationConfig* loc = matchLocation(srv, uri_path);
 
     // --- 1. Redirect ---
     if (loc && loc->return_url.first != 0) {
@@ -169,11 +186,44 @@ void Server::buildResponse(Client& c) {
         return;
     }
 
-    std::string physical = resolvePath(c.getPath(), loc);
-    std::cout << "[ROUTE] " << c.getMethod() << " " << c.getPath()
+    std::string physical = resolvePath(uri_path, loc);
+    std::cout << "[ROUTE] " << c.getMethod() << " " << request_uri
               << " -> " << physical << std::endl;
 
-    // --- 3. DELETE ---
+    // --- 3. CGI ---
+    std::string ext = getExtension(uri_path);
+    std::map<std::string, std::string>::const_iterator cgi_it = srv.cgi_handlers.find(ext);
+    if (cgi_it != srv.cgi_handlers.end()) {
+        struct stat cgi_st;
+        if (stat(physical.c_str(), &cgi_st) != 0 || !S_ISREG(cgi_st.st_mode)) {
+            c.sendBuf() = buildErrorResponse(404, "Not Found", srv);
+            c.setFileSize(c.sendBuf().size());
+            return;
+        }
+
+        size_t slash = physical.rfind('/');
+        std::string script_dir = (slash == std::string::npos) ? "." : physical.substr(0, slash);
+        if (access(cgi_it->second.c_str(), X_OK) != 0 ||
+            access(physical.c_str(), R_OK) != 0 ||
+            access(script_dir.c_str(), X_OK) != 0) {
+            c.sendBuf() = buildErrorResponse(403, "Forbidden", srv);
+            c.setFileSize(c.sendBuf().size());
+            return;
+        }
+
+        CgiHandler cgi;
+        if (!cgi.execute(c, srv, request_uri, physical, cgi_it->second)) {
+            c.sendBuf() = buildErrorResponse(500, "Internal Server Error", srv);
+            c.setFileSize(c.sendBuf().size());
+            return;
+        }
+
+        c.sendBuf() = cgi.getResponse();
+        c.setFileSize(c.sendBuf().size());
+        return;
+    }
+
+    // --- 4. DELETE ---
     if (c.getMethod() == "DELETE") {
         struct stat st;
         if (physical.empty() || stat(physical.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) {
@@ -193,7 +243,7 @@ void Server::buildResponse(Client& c) {
         return;
     }
 
-    // --- 4. POST (file upload) ---
+    // --- 5. POST (file upload) ---
     if (c.getMethod() == "POST") {
         if (loc && !loc->upload_store.empty()) {
             if (saveUpload(c, loc)) {
@@ -222,7 +272,7 @@ void Server::buildResponse(Client& c) {
         return;
     }
 
-    // --- 5. GET ---
+    // --- 6. GET ---
     struct stat st;
 
     if (stat(physical.c_str(), &st) != 0) {
@@ -235,10 +285,10 @@ void Server::buildResponse(Client& c) {
     // Directory handling
     if (S_ISDIR(st.st_mode)) {
         // Missing trailing slash -> redirect
-        if (c.getPath()[c.getPath().size()-1] != '/') {
+        if (uri_path[uri_path.size()-1] != '/') {
             std::ostringstream oss;
             oss << "HTTP/1.1 301 Moved Permanently\r\n"
-                << "Location: " << c.getPath() << "/\r\n"
+                << "Location: " << uri_path << "/\r\n"
                 << "Content-Length: 0\r\n"
                 << "Connection: close\r\n\r\n";
             c.sendBuf() = oss.str();
@@ -261,7 +311,7 @@ void Server::buildResponse(Client& c) {
 
         // Autoindex
         if (loc->autoindex) {
-            std::string body = buildAutoindex(c.getPath(), physical);
+            std::string body = buildAutoindex(uri_path, physical);
             std::ostringstream oss;
             oss << "HTTP/1.1 200 OK\r\n"
                 << "Server: Webserv/1.0\r\n"

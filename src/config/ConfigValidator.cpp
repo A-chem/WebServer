@@ -19,6 +19,7 @@ void ConfigValidator::initRules() {
     _rules["autoindex"] = (DirectiveRule){1, 1, (1 << CTX_SERVER) | (1 << CTX_LOCATION), true, false};
     _rules["client_max_body_size"] = (DirectiveRule){1, 1, (1 << CTX_MAIN) | (1 << CTX_SERVER) | (1 << CTX_LOCATION), true, false};
     _rules["return"] = (DirectiveRule){2, 2, (1 << CTX_SERVER) | (1 << CTX_LOCATION), true, false};
+    _rules["cgi"] = (DirectiveRule){2, 2, (1 << CTX_SERVER), false, false};
     _rules["cgi_pass"] = (DirectiveRule){1, 2, (1 << CTX_LOCATION), true, false};
     _rules["upload_store"] = (DirectiveRule){1, 1, (1 << CTX_LOCATION), true, false};
     _rules["deny"] = (DirectiveRule){1, 1, (1 << CTX_LIMIT_EXCEPT), false, false};

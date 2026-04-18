@@ -71,4 +71,3 @@ void	Server::disconnect(int fd) {
 	clients.erase(fd);
 	std::cout << "[DISCONNECT] fd=" << fd << std::endl;
 }
-
