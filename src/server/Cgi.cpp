@@ -130,7 +130,7 @@ bool Server::executeCgi(Client& c, const std::string& scriptPath, const std::str
 	waitpid(pid, &status, 0);
 	std::cerr << "[CGI DEBUG] Output size: " << raw.size() << " bytes" << std::endl;
 	std::cerr << "[CGI DEBUG] Output preview (first 200 chars):\n"
-	          << raw.substr(0, 200) << std::endl;
+	          << raw.substr(0, std::min(raw.size(), static_cast<size_t>(200))) << std::endl;
 	if (raw.empty() && !WIFEXITED(status)) return false;
 
 	std::string headerPart;
@@ -144,7 +144,7 @@ bool Server::executeCgi(Client& c, const std::string& scriptPath, const std::str
 	if (sep == std::string::npos) {
 		std::cerr << "[CGI DEBUG] parse failed: missing header/body separator. Full raw output:\n"
 		          << raw << std::endl;
-		return false;
+		bodyPart = raw;
 	}
 	else {
 		headerPart = raw.substr(0, sep);
