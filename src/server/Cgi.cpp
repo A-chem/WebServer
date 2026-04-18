@@ -128,6 +128,9 @@ bool Server::executeCgi(Client& c, const std::string& scriptPath, const std::str
 
 	int status = 0;
 	waitpid(pid, &status, 0);
+	std::cerr << "[CGI DEBUG] Output size: " << raw.size() << " bytes" << std::endl;
+	std::cerr << "[CGI DEBUG] Output preview (first 200 chars):\n"
+	          << raw.substr(0, 200) << std::endl;
 	if (raw.empty() && !WIFEXITED(status)) return false;
 
 	std::string headerPart;
@@ -138,7 +141,11 @@ bool Server::executeCgi(Client& c, const std::string& scriptPath, const std::str
 		sep = raw.find("\n\n");
 		sepLen = 2;
 	}
-	if (sep == std::string::npos) bodyPart = raw;
+	if (sep == std::string::npos) {
+		std::cerr << "[CGI DEBUG] parse failed: missing header/body separator. Full raw output:\n"
+		          << raw << std::endl;
+		return false;
+	}
 	else {
 		headerPart = raw.substr(0, sep);
 		bodyPart = raw.substr(sep + sepLen);
@@ -148,6 +155,7 @@ bool Server::executeCgi(Client& c, const std::string& scriptPath, const std::str
 	std::string reason = "OK";
 	std::string contentType = "text/html";
 	std::vector<std::string> passthroughHeaders;
+	bool hasContentType = false;
 
 	if (!headerPart.empty()) {
 		std::istringstream ss(headerPart);
@@ -168,12 +176,20 @@ bool Server::executeCgi(Client& c, const std::string& scriptPath, const std::str
 				if (reason.empty()) reason = "OK";
 			} else if (key == "Content-Type") {
 				contentType = value;
+				hasContentType = true;
 			} else if (key == "Content-Length" || key == "Connection") {
 				continue;
 			} else {
 				passthroughHeaders.push_back(key + ": " + value);
 			}
 		}
+	}
+	std::cerr << "[CGI DEBUG] Parsed response: code=" << code
+	          << " reason=\"" << reason << "\""
+	          << " content_type=\"" << contentType << "\""
+	          << " body_size=" << bodyPart.size() << std::endl;
+	if (!hasContentType) {
+		std::cerr << "[CGI DEBUG] Warning: CGI output did not include Content-Type header" << std::endl;
 	}
 
 	std::ostringstream oss;
@@ -185,6 +201,7 @@ bool Server::executeCgi(Client& c, const std::string& scriptPath, const std::str
 		oss << passthroughHeaders[i] << "\r\n";
 	oss << "Connection: " << (c.isKeepAlive() ? "keep-alive" : "close") << "\r\n\r\n";
 	oss << bodyPart;
+	std::cerr << "[CGI DEBUG] Final HTTP response to client:\n" << oss.str() << std::endl;
 	c.sendBuf() = oss.str();
 	c.setFileSize(c.sendBuf().size());
 	return true;

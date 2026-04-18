@@ -237,8 +237,13 @@ serve_file:
 	std::string cgiBin;
 	if ((c.getMethod() == "GET" || c.getMethod() == "POST") && resolveCgiInterpreter(*loc, physical, cgiBin)) {
 		if (!executeCgi(c, physical, uriPath, query, cgiBin, loc->root)) {
+			std::cerr << "[CGI DEBUG] executeCgi failed for script=" << physical
+			          << " cgi_bin=" << cgiBin << std::endl;
 			c.sendBuf() = buildErrorResponse(500, "Internal Server Error", srv);
 			c.setFileSize(c.sendBuf().size());
+		} else {
+			std::cerr << "[CGI DEBUG] CGI response size sent to handleResponse: "
+			          << c.sendBuf().size() << " bytes" << std::endl;
 		}
 		return;
 	}
