@@ -1,6 +1,8 @@
 #include "Server.hpp"
+#include "CGI.hpp"
 #include <sstream>
 #include <dirent.h>
+#include <cctype>
 
 
 // mime types
@@ -21,6 +23,70 @@ static std::string getMimeType(const std::string& path) {
 	if (ext == ".pdf") return "application/pdf";
 	if (ext == ".txt") return "text/plain";
 	return "application/octet-stream";
+}
+
+static std::string reasonPhrase(int code) {
+	switch (code) {
+		case 200: return "OK";
+		case 201: return "Created";
+		case 204: return "No Content";
+		case 301: return "Moved Permanently";
+		case 302: return "Found";
+		case 400: return "Bad Request";
+		case 403: return "Forbidden";
+		case 404: return "Not Found";
+		case 405: return "Method Not Allowed";
+		case 413: return "Content Too Large";
+		case 500: return "Internal Server Error";
+		case 504: return "Gateway Timeout";
+		default: return "OK";
+	}
+}
+
+static bool hasHeaderCaseInsensitive(const std::map<std::string, std::string>& headers, const std::string& key) {
+	for (std::map<std::string, std::string>::const_iterator it = headers.begin(); it != headers.end(); ++it) {
+		if (it->first.size() != key.size())
+			continue;
+		bool same = true;
+		for (size_t i = 0; i < key.size(); ++i) {
+			if (std::tolower(static_cast<unsigned char>(it->first[i])) !=
+				std::tolower(static_cast<unsigned char>(key[i]))) {
+				same = false;
+				break;
+			}
+		}
+		if (same)
+			return true;
+	}
+	return false;
+}
+
+static std::string findCgiExecutable(const LocationConfig& loc, const std::string& path) {
+	if (loc.cgi_pass.empty())
+		return "";
+	size_t dot = path.rfind('.');
+	if (dot != std::string::npos) {
+		std::string ext = path.substr(dot);
+		std::map<std::string, std::string>::const_iterator it = loc.cgi_pass.find(ext);
+		if (it != loc.cgi_pass.end())
+			return it->second;
+	}
+	std::map<std::string, std::string>::const_iterator fallback = loc.cgi_pass.find("*");
+	if (fallback != loc.cgi_pass.end())
+		return fallback->second;
+	return "";
+}
+
+static std::string toAbsolutePath(const std::string& path) {
+	if (!path.empty() && path[0] == '/')
+		return path;
+	char cwd[4096];
+	if (getcwd(cwd, sizeof(cwd)) == NULL)
+		return path;
+	std::string abs = cwd;
+	if (abs[abs.size() - 1] != '/')
+		abs += "/";
+	return abs + path;
 }
 
 // routing (longest prefix wins)
@@ -173,7 +239,53 @@ void Server::buildResponse(Client& c) {
     std::cout << "[ROUTE] " << c.getMethod() << " " << c.getPath()
               << " -> " << physical << std::endl;
 
-    // --- 3. DELETE ---
+    // --- 3. CGI ---
+    if (c.getMethod() == "GET" || c.getMethod() == "POST") {
+        std::string cgiExec = findCgiExecutable(*loc, physical);
+        if (!cgiExec.empty()) {
+            struct stat cgiStat;
+            if (stat(physical.c_str(), &cgiStat) != 0 || !S_ISREG(cgiStat.st_mode)) {
+                c.sendBuf() = buildErrorResponse(404, "Not Found", srv);
+                c.setFileSize(c.sendBuf().size());
+                return;
+            }
+            CGI cgi(toAbsolutePath(physical), cgiExec, c, *loc, srv);
+            CGIResult cgiResult;
+            std::string cgiError;
+            if (!cgi.execute(cgiResult, cgiError)) {
+                int errCode = (cgiError == "CGI timeout") ? 504 : 500;
+                c.sendBuf() = buildErrorResponse(errCode, reasonPhrase(errCode), srv);
+                c.setFileSize(c.sendBuf().size());
+                std::cout << "[CGI] failure: " << cgiError << std::endl;
+                return;
+            }
+
+            std::ostringstream oss;
+            int statusCode = cgiResult.status_code;
+            if (statusCode < 100 || statusCode > 599)
+                statusCode = 200;
+            oss << "HTTP/1.1 " << statusCode << " " << reasonPhrase(statusCode) << "\r\n";
+            oss << "Server: Webserv/1.0\r\n";
+            for (std::map<std::string, std::string>::const_iterator it = cgiResult.headers.begin();
+                 it != cgiResult.headers.end(); ++it) {
+                if (it->first == "Status" || it->first == "Connection")
+                    continue;
+                oss << it->first << ": " << it->second << "\r\n";
+            }
+            if (!hasHeaderCaseInsensitive(cgiResult.headers, "Content-Type"))
+                oss << "Content-Type: text/html\r\n";
+            if (!hasHeaderCaseInsensitive(cgiResult.headers, "Content-Length"))
+                oss << "Content-Length: " << cgiResult.body.size() << "\r\n";
+            oss << "Connection: " << (c.isKeepAlive() ? "keep-alive" : "close") << "\r\n\r\n";
+            oss << cgiResult.body;
+            c.sendBuf() = oss.str();
+            c.setFileSize(c.sendBuf().size());
+            std::cout << "[CGI] " << statusCode << " " << physical << std::endl;
+            return;
+        }
+    }
+
+    // --- 4. DELETE ---
     if (c.getMethod() == "DELETE") {
         struct stat st;
         if (physical.empty() || stat(physical.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) {
@@ -193,7 +305,7 @@ void Server::buildResponse(Client& c) {
         return;
     }
 
-    // --- 4. POST (file upload) ---
+    // --- 5. POST (file upload) ---
     if (c.getMethod() == "POST") {
         if (loc && !loc->upload_store.empty()) {
             if (saveUpload(c, loc)) {
@@ -222,7 +334,7 @@ void Server::buildResponse(Client& c) {
         return;
     }
 
-    // --- 5. GET ---
+    // --- 6. GET ---
     struct stat st;
 
     if (stat(physical.c_str(), &st) != 0) {

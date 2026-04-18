@@ -15,6 +15,7 @@ SRCS    = src/main.cpp \
           src/server/Epoll.cpp \
           src/server/Server.cpp \
           src/server/Request.cpp \
+          src/server/CGI.cpp \
           src/server/ErrorPages.cpp \
           src/server/Response.cpp
 

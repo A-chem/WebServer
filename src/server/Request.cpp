@@ -1,5 +1,83 @@
 #include "Server.hpp"
+#include <cctype>
 #include <sstream>
+#include <cstdlib>
+
+static std::string getHeaderValue(const std::map<std::string, std::string>& headers, const std::string& key) {
+	for (std::map<std::string, std::string>::const_iterator it = headers.begin(); it != headers.end(); ++it) {
+		if (it->first.size() != key.size())
+			continue;
+		bool same = true;
+		for (size_t i = 0; i < key.size(); ++i) {
+			if (std::tolower(static_cast<unsigned char>(it->first[i])) !=
+				std::tolower(static_cast<unsigned char>(key[i]))) {
+				same = false;
+				break;
+			}
+		}
+		if (same)
+			return it->second;
+	}
+	return "";
+}
+
+static bool isChunkedTransfer(const std::string& value) {
+	std::string lowered = value;
+	for (size_t i = 0; i < lowered.size(); ++i)
+		lowered[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(lowered[i])));
+	return lowered.find("chunked") != std::string::npos;
+}
+
+static bool parseChunkSize(const std::string& line, size_t& sizeOut) {
+	std::string chunkLine = line;
+	size_t semicolon = chunkLine.find(';');
+	if (semicolon != std::string::npos)
+		chunkLine = chunkLine.substr(0, semicolon);
+	if (chunkLine.empty())
+		return false;
+	std::istringstream ss(chunkLine);
+	ss >> std::hex >> sizeOut;
+	return !ss.fail();
+}
+
+static bool decodeChunkedBody(const std::string& raw, std::string& bodyOut, size_t& consumed) {
+	size_t pos = 0;
+	bodyOut.clear();
+	consumed = 0;
+	while (true) {
+		size_t lineEnd = raw.find("\r\n", pos);
+		if (lineEnd == std::string::npos)
+			return false;
+		size_t chunkSize = 0;
+		if (!parseChunkSize(raw.substr(pos, lineEnd - pos), chunkSize))
+			return false;
+		pos = lineEnd + 2;
+		if (raw.size() < pos + chunkSize + 2)
+			return false;
+		if (chunkSize > 0)
+			bodyOut.append(raw.substr(pos, chunkSize));
+		pos += chunkSize;
+		if (raw.substr(pos, 2) != "\r\n")
+			return false;
+		pos += 2;
+		if (chunkSize == 0) {
+			if (pos == raw.size()) {
+				consumed = pos;
+				return true;
+			}
+			size_t trailerEnd = raw.find("\r\n\r\n", pos);
+			if (trailerEnd != std::string::npos) {
+				consumed = trailerEnd + 4;
+				return true;
+			}
+			if (raw.size() >= pos + 2 && raw.substr(pos, 2) == "\r\n") {
+				consumed = pos + 2;
+				return true;
+			}
+			return false;
+		}
+	}
+}
 
 // normalize the path (hna y9dr ikon path traversal o tssd9 mkhli server yfot root so each .. ghadi nrj3o lor 7ta nwsslo root o n7bsso)
 
@@ -54,14 +132,15 @@ static	size_t parseRequestLine(Client& c) {
 	size_t qmark = rawpath.find('?');
 	if (qmark != std::string::npos) {
 		path = rawpath.substr(0, qmark);
-		query = rawpath.substr(qmark);
+		query = rawpath.substr(qmark + 1);
 	}
 
 	std::string safe = normalizePath(path);
 	if (safe.empty()) return std::string::npos;
 
 	c.setMethod(method);
-	c.setPath(safe + query);
+	c.setPath(safe);
+	c.setQueryString(query);
 	c.setVersion(version);
 	return crlf + 2;
 }
@@ -129,7 +208,7 @@ void	Server::handleRequest(int fd) {
 
 			// keep-alive : ida kan HTTP/1.1 rah default hiya n resusiw nfs client ila ida kant connetion:close
 			std::map<std::string, std::string> hdrs = c.getHeader();
-			std::string conn = hdrs.count("Connection") ? hdrs["Connection"] : "";
+			std::string conn = getHeaderValue(hdrs, "Connection");
 			if (c.getVersion() == "HTTP/1.1" && conn != "close")
 				c.setKeepAlive(true);
 			else if (conn == "keep-alive")
@@ -137,8 +216,16 @@ void	Server::handleRequest(int fd) {
 			else
 				c.setKeepAlive(false);
 
-			if (hdrs.count("Content-Length")) {
-				size_t cl = static_cast<size_t>(std::atoi(hdrs["Content-Length"].c_str()));
+			std::string te = getHeaderValue(hdrs, "Transfer-Encoding");
+			if (!te.empty() && isChunkedTransfer(te)) {
+				c.setChunkedBody(true);
+				c.setState(READ_BODY);
+				continue;
+			}
+
+			std::string clHeader = getHeaderValue(hdrs, "Content-Length");
+			if (!clHeader.empty()) {
+				size_t cl = static_cast<size_t>(std::atoi(clHeader.c_str()));
 				c.setContentLength(cl);
 
 				ServerConfig& srv = _configs[0];
@@ -171,11 +258,28 @@ void	Server::handleRequest(int fd) {
 					c.setState(PROCESS_REQUEST);
 			} else {
 				c.setContentLength(0);
+				c.setChunkedBody(false);
 				c.setState(PROCESS_REQUEST);
 			}
 		}
 		else if (c.getState() == READ_BODY) {
-			if (c.recvBuf().size() >= c.getContentLength()) {
+			if (c.isChunkedBody()) {
+				std::string decoded;
+				size_t consumed = 0;
+				if (decodeChunkedBody(c.recvBuf(), decoded, consumed)) {
+					c.setBody(decoded);
+					c.recvBuf().erase(0, consumed);
+					c.setChunkedBody(false);
+					c.setState(PROCESS_REQUEST);
+				} else {
+					if (c.recvBuf().size() > 1024 * 1024 * 50) {
+						c.setErrorCode(400);
+						c.setState(PROCESS_REQUEST);
+					}
+					break;
+				}
+			}
+			else if (c.recvBuf().size() >= c.getContentLength()) {
 				c.setBody(c.recvBuf().substr(0, c.getContentLength()));
 				c.recvBuf().erase(0, c.getContentLength());
 				c.setState(PROCESS_REQUEST);
