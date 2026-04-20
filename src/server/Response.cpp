@@ -1,9 +1,8 @@
 #include "Server.hpp"
+#include "CGI.hpp"
 #include <sstream>
 #include <dirent.h>
 
-
-// mime types
 static std::string getMimeType(const std::string& path) {
 	size_t dot = path.rfind('.');
 	if (dot == std::string::npos) return "application/octet-stream";
@@ -15,15 +14,9 @@ static std::string getMimeType(const std::string& path) {
 	if (ext == ".png") return "image/png";
 	if (ext == ".jpg" || ext == ".jpeg") return "image/jpeg";
 	if (ext == ".gif") return "image/gif";
-	if (ext == ".ico") return "image/x-icon";
-	if (ext == ".svg") return "image/svg+xml";
-	if (ext == ".mp4") return "video/mp4";
-	if (ext == ".pdf") return "application/pdf";
 	if (ext == ".txt") return "text/plain";
 	return "application/octet-stream";
 }
-
-// routing (longest prefix wins)
 
 static LocationConfig* matchLocation(ServerConfig& srv, const std::string& uri) {
 	LocationConfig* best = NULL;
@@ -43,21 +36,41 @@ static LocationConfig* matchLocation(ServerConfig& srv, const std::string& uri) 
 	return best;
 }
 
+static std::string resolvePath(const std::string& uri, LocationConfig* loc)
+{
+    std::string root = loc->root;
 
-// from the uri you type to the filesystem one the path that the server will use localy
-static	std::string resolvePath(const std::string& uri, LocationConfig* loc) {
-	std::string root = loc->root;
-	if (!root.empty() && root[root.size()-1] == '/')
-		root.erase(root.size()-1);
-	std::string remain = uri.substr(loc->path.size());
-	if (remain.empty() || remain[0] != '/')
-		remain = "/" + remain;
-	return root + remain;
+    if (!root.empty() && root[root.size() - 1] == '/')
+        root.erase(root.size() - 1);
+
+    // STEP 1: remove location prefix
+    std::string remain = uri.substr(loc->path.size());
+
+    // STEP 2: fix slash
+    if (!remain.empty() && remain[0] != '/')
+        remain = "/" + remain;
+
+    // STEP 3: IMPORTANT FIX
+    // rebuild full path INCLUDING location directory name
+    std::string locationPart = loc->path;
+
+    // remove trailing slash from location
+    if (!locationPart.empty() && locationPart[locationPart.size() - 1] == '/')
+        locationPart.erase(locationPart.size() - 1);
+
+    std::string result = root + locationPart + remain;
+
+    std::cout << "[RESOLVE] URI: " << uri << std::endl;
+    std::cout << "[RESOLVE] Location: " << loc->path << std::endl;
+    std::cout << "[RESOLVE] Remain: " << remain << std::endl;
+    std::cout << "[RESOLVE] Result: " << result << std::endl;
+
+    return result;
 }
 
-static	std::string buildAutoindex(const std::string& uri, const std::string& dir_path) {
+static std::string buildAutoindex(const std::string& uri, const std::string& dir_path) {
 	std::ostringstream html;
-	html << "<!DOCKTYPE html>\n<html><head><title>Index of " << uri << "</title></head>\n"
+	html << "<!DOCTYPE html>\n<html><head><title>Index of " << uri << "</title></head>\n"
 		<< "<body><h1>Index of " << uri << "</h1><hr><pre>\n";
 
 	DIR* dir = opendir(dir_path.c_str());
@@ -76,302 +89,364 @@ static	std::string buildAutoindex(const std::string& uri, const std::string& dir
 	return html.str();
 }
 
-// --- POST: FILE UPLOAD ---
-static bool saveUpload(Client& c, LocationConfig* loc) {
-    if (loc->upload_store.empty()) return false;
-
-    // Try to get filename from Content-Disposition header
-    std::string filename;
-    std::map<std::string, std::string> hdrs = c.getHeader();
-    if (hdrs.count("Content-Disposition")) {
-        std::string cd = hdrs["Content-Disposition"];
-        size_t fn = cd.find("filename=\"");
-        if (fn != std::string::npos) {
-            fn += 10;
-            size_t fe = cd.find("\"", fn);
-            if (fe != std::string::npos)
-                filename = cd.substr(fn, fe - fn);
-        }
-    }
-    // Fall back to timestamp-based name
-    if (filename.empty()) {
-        std::ostringstream ss;
-        ss << "upload_" << (size_t)time(NULL) << ".bin";
-        filename = ss.str();
-    }
-
-    std::string store = loc->upload_store;
-    if (store[store.size()-1] != '/') store += "/";
-
-    std::ofstream out((store + filename).c_str(), std::ios::binary);
-    if (!out.is_open()) return false;
-    out.write(c.getBody().c_str(), c.getBody().size());
-    return out.good();
-}
-
-// --- SERVER SELECTION ---
-// Picks the right ServerConfig based on which listen fd accepted the connection.
-// Falls back to the first config if no match found.
 static ServerConfig& selectServer(std::vector<ServerConfig>& configs,
                                    const std::map<int, int>& fd_to_config,
                                    int listen_fd) {
-    std::map<int, int>::const_iterator it = fd_to_config.find(listen_fd);
-    if (it != fd_to_config.end())
-        return configs[it->second];
-    return configs[0];
+	std::map<int, int>::const_iterator it = fd_to_config.find(listen_fd);
+	if (it != fd_to_config.end())
+		return configs[it->second];
+	return configs[0];
 }
 
-// --- BUILD RESPONSE ---
+static bool saveUpload(Client& c, LocationConfig* loc) {
+	if (loc->upload_store.empty()) return false;
+
+	std::string filename;
+	std::map<std::string, std::string> hdrs = c.getHeader();
+	if (hdrs.count("Content-Disposition")) {
+		std::string cd = hdrs["Content-Disposition"];
+		size_t fn = cd.find("filename=\"");
+		if (fn != std::string::npos) {
+			fn += 10;
+			size_t fe = cd.find("\"", fn);
+			if (fe != std::string::npos)
+				filename = cd.substr(fn, fe - fn);
+		}
+	}
+	if (filename.empty()) {
+		std::ostringstream ss;
+		ss << "upload_" << (size_t)time(NULL) << ".bin";
+		filename = ss.str();
+	}
+
+	std::string store = loc->upload_store;
+	if (store[store.size()-1] != '/') store += "/";
+
+	std::ofstream out((store + filename).c_str(), std::ios::binary);
+	if (!out.is_open()) return false;
+	out.write(c.getBody().c_str(), c.getBody().size());
+	return out.good();
+}
+
+static const char* getStatusMsg(int code) {
+	if (code == 200) return "OK";
+	if (code == 201) return "Created";
+	if (code == 204) return "No Content";
+	if (code == 301) return "Moved Permanently";
+	if (code == 403) return "Forbidden";
+	if (code == 404) return "Not Found";
+	if (code == 405) return "Method Not Allowed";
+	if (code == 500) return "Internal Server Error";
+	if (code == 504) return "Gateway Timeout";
+	return "Unknown";
+}
+
 void Server::buildResponse(Client& c) {
-    ServerConfig& srv = selectServer(_configs, _fd_to_config, c.getListenFd());
+	ServerConfig& srv = selectServer(_configs, _fd_to_config, c.getListenFd());
 
-    // Early exit for errors set during request parsing (400, 413)
-    if (c.getErrorCode() != 0) {
-        std::string msg = (c.getErrorCode() == 413) ? "Content Too Large" : "Bad Request";
-        c.sendBuf() = buildErrorResponse(c.getErrorCode(), msg, srv);
-        c.setFileSize(c.sendBuf().size());
-        return;
+	if (c.getErrorCode() != 0) {
+		std::string msg = (c.getErrorCode() == 413) ? "Content Too Large" : "Bad Request";
+		c.sendBuf() = buildErrorResponse(c.getErrorCode(), msg, srv);
+		c.setFileSize(c.sendBuf().size());
+		return;
+	}
+
+	LocationConfig* loc = matchLocation(srv, c.getPath());
+
+	if (loc && loc->return_url.first != 0) {
+		std::ostringstream oss;
+		int code = loc->return_url.first;
+		oss << "HTTP/1.1 " << code << " Moved\r\n"
+			<< "Location: " << loc->return_url.second << "\r\n"
+			<< "Content-Length: 0\r\n"
+			<< "Connection: close\r\n\r\n";
+		c.sendBuf() = oss.str();
+		c.setFileSize(c.sendBuf().size());
+		return;
+	}
+
+	if (loc && !loc->allowed_methods.empty()) {
+		bool allowed = false;
+		for (size_t i = 0; i < loc->allowed_methods.size(); ++i)
+			if (loc->allowed_methods[i] == c.getMethod()) { allowed = true; break; }
+		if (!allowed) {
+			c.sendBuf() = buildErrorResponse(405, "Method Not Allowed", srv);
+			c.setFileSize(c.sendBuf().size());
+			return;
+		}
+	}
+
+	if (!loc || loc->root.empty()) {
+		c.sendBuf() = buildErrorResponse(404, "Not Found", srv);
+		c.setFileSize(c.sendBuf().size());
+		return;
+	}
+
+	std::string physical = resolvePath(c.getPath(), loc);
+
+	std::cout << "[ROUTE] URI: " << c.getPath() << std::endl;
+	std::cout << "[ROUTE] Location: " << loc->path << std::endl;
+	std::cout << "[ROUTE] Root: " << loc->root << std::endl;
+	std::cout << "[ROUTE] Physical: " << physical << std::endl;
+
+	// === CGI HANDLING ===
+	if (!loc->cgi_pass.empty()) {
+
+		size_t dot = physical.rfind('.');
+        				std::cout << "[CGI] Interpreter: ssssssssssssssss " << dot << std::endl;
+
+		if (dot != std::string::npos) {
+			std::string ext = physical.substr(dot);
+			
+			for (std::map<std::string, std::string>::iterator it = loc->cgi_pass.begin(); 
+         it != loc->cgi_pass.end(); ++it) {
+        std::cout << "Key (Extension): [" << it->first << "] -> Value (Interpreter): [" << it->second << "]" << std::endl;
     }
+			
+			if (loc->cgi_pass.find(ext) != loc->cgi_pass.end()) {
+				std::string interpreter = loc->cgi_pass[ext];
+				
+				std::cout << "\n[CGI] === START ===" << std::endl;
+				std::cout << "[CGI] Interpreter: " << interpreter << std::endl;
+				std::cout << "[CGI] Script: " << physical << std::endl;
+				
+				// Check if script exists
+				if (access(physical.c_str(), F_OK) != 0) {
+					std::cout << "[CGI] ERROR: Script not found" << std::endl;
+					c.sendBuf() = buildErrorResponse(404, "Script Not Found", srv);
+					c.setFileSize(c.sendBuf().size());
+					return;
+				}
+				
+				if (access(physical.c_str(), X_OK) != 0) {
+                    std::cout << "hhhhhhhhh" << physical << std::endl;
+					std::cout << "[CGI] 2ERROR: Script not executable" << std::endl;
+					c.sendBuf() = buildErrorResponse(403, "Script Not Executable", srv);
+					c.setFileSize(c.sendBuf().size());
+					return;
+				}
+				
+				size_t qmark = c.getPath().find('?');
+				std::string query = (qmark != std::string::npos) ?
+					c.getPath().substr(qmark + 1) : "";
+				
+				CGI cgi;
+				cgi.setMethod(c.getMethod());
+				cgi.setPath(physical);
+				cgi.setQuery(query);
+				cgi.setBody(c.getBody());
+				cgi.setContentType(c.getHeader().count("Content-Type") ?
+					c.getHeader()["Content-Type"] : "");
+				cgi.setHost(c.getHeader().count("Host") ?
+					c.getHeader()["Host"] : "localhost");
+				
+				int result = cgi.execute(interpreter, 30);
+				
+				std::cout << "[CGI] Result: " << result << std::endl;
+				
+				if (cgi.hasError()) {
+					std::cout << "[CGI] Has error, returning error response" << std::endl;
+					c.sendBuf() = buildErrorResponse(result, getStatusMsg(result), srv);
+					c.setFileSize(c.sendBuf().size());
+					return;
+				}
+				
+				int status = cgi.getStatus();
+				std::string body = cgi.getBody();
+				
+				std::cout << "[CGI] Status: " << status << std::endl;
+				std::cout << "[CGI] Body size: " << body.size() << std::endl;
+				
+				std::ostringstream oss;
+				oss << "HTTP/1.1 " << status << " " << getStatusMsg(status) << "\r\n"
+					<< "Server: Webserv/1.0\r\n"
+					<< "Content-Length: " << body.size() << "\r\n"
+					<< "Content-Type: text/html\r\n"
+					<< "Connection: close\r\n\r\n";
+				
+				if (!body.empty())
+					oss << body;
+				
+				c.sendBuf() = oss.str();
+				c.setFileSize(c.sendBuf().size());
+				
+				std::cout << "[CGI] === COMPLETE ===" << std::endl << std::endl;
+				return;
+			}
+		}
+	}
 
-    LocationConfig* loc = matchLocation(srv, c.getPath());
+	// === DELETE ===
+	if (c.getMethod() == "DELETE") {
+		struct stat st;
+		if (physical.empty() || stat(physical.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) {
+			c.sendBuf() = buildErrorResponse(404, "Not Found", srv);
+		} else if (remove(physical.c_str()) != 0) {
+			c.sendBuf() = buildErrorResponse(403, "Forbidden", srv);
+		} else {
+			std::ostringstream oss;
+			oss << "HTTP/1.1 204 No Content\r\n"
+				<< "Server: Webserv/1.0\r\n"
+				<< "Content-Length: 0\r\n"
+				<< "Connection: close\r\n\r\n";
+			c.sendBuf() = oss.str();
+		}
+		c.setFileSize(c.sendBuf().size());
+		return;
+	}
 
-    // --- 1. Redirect ---
-    if (loc && loc->return_url.first != 0) {
-        std::ostringstream oss;
-        int code = loc->return_url.first;
-        oss << "HTTP/1.1 " << code << " Moved\r\n"
-            << "Location: " << loc->return_url.second << "\r\n"
-            << "Content-Length: 0\r\n"
-            << "Connection: close\r\n\r\n";
-        c.sendBuf() = oss.str();
-        c.setFileSize(c.sendBuf().size());
-        std::cout << "[RESPONSE] " << code << " -> " << loc->return_url.second << std::endl;
-        return;
-    }
+	// === POST ===
+	if (c.getMethod() == "POST") {
+		if (loc && !loc->upload_store.empty()) {
+			if (saveUpload(c, loc)) {
+				std::string body = "<html><body><h1>201 Created</h1></body></html>";
+				std::ostringstream oss;
+				oss << "HTTP/1.1 201 Created\r\n"
+					<< "Server: Webserv/1.0\r\n"
+					<< "Content-Length: " << body.size() << "\r\n"
+					<< "Content-Type: text/html\r\n"
+					<< "Connection: close\r\n\r\n" << body;
+				c.sendBuf() = oss.str();
+			} else {
+				c.sendBuf() = buildErrorResponse(500, "Internal Server Error", srv);
+			}
+		} else {
+			std::ostringstream oss;
+			oss << "HTTP/1.1 204 No Content\r\n"
+				<< "Server: Webserv/1.0\r\n"
+				<< "Content-Length: 0\r\n"
+				<< "Connection: close\r\n\r\n";
+			c.sendBuf() = oss.str();
+		}
+		c.setFileSize(c.sendBuf().size());
+		return;
+	}
 
-    // --- 2. Method validation ---
-    if (loc && !loc->allowed_methods.empty()) {
-        bool allowed = false;
-        for (size_t i = 0; i < loc->allowed_methods.size(); ++i)
-            if (loc->allowed_methods[i] == c.getMethod()) { allowed = true; break; }
-        if (!allowed) {
-            c.sendBuf() = buildErrorResponse(405, "Method Not Allowed", srv);
-            c.setFileSize(c.sendBuf().size());
-            std::cout << "[RESPONSE] 405: " << c.getMethod() << " not allowed" << std::endl;
-            return;
-        }
-    }
+	// === GET ===
+	struct stat st;
 
-    // No location matched and no root configured -> 404
-    if (!loc || loc->root.empty()) {
-        c.sendBuf() = buildErrorResponse(404, "Not Found", srv);
-        c.setFileSize(c.sendBuf().size());
-        return;
-    }
+	if (stat(physical.c_str(), &st) != 0) {
+		c.sendBuf() = buildErrorResponse(404, "Not Found", srv);
+		c.setFileSize(c.sendBuf().size());
+		return;
+	}
 
-    std::string physical = resolvePath(c.getPath(), loc);
-    std::cout << "[ROUTE] " << c.getMethod() << " " << c.getPath()
-              << " -> " << physical << std::endl;
+	if (S_ISDIR(st.st_mode)) {
+		if (c.getPath()[c.getPath().size()-1] != '/') {
+			std::ostringstream oss;
+			oss << "HTTP/1.1 301 Moved Permanently\r\n"
+				<< "Location: " << c.getPath() << "/\r\n"
+				<< "Content-Length: 0\r\n"
+				<< "Connection: close\r\n\r\n";
+			c.sendBuf() = oss.str();
+			c.setFileSize(c.sendBuf().size());
+			return;
+		}
 
-    // --- 3. DELETE ---
-    if (c.getMethod() == "DELETE") {
-        struct stat st;
-        if (physical.empty() || stat(physical.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) {
-            c.sendBuf() = buildErrorResponse(404, "Not Found", srv);
-        } else if (remove(physical.c_str()) != 0) {
-            c.sendBuf() = buildErrorResponse(403, "Forbidden", srv);
-        } else {
-            std::ostringstream oss;
-            oss << "HTTP/1.1 204 No Content\r\n"
-                << "Server: Webserv/1.0\r\n"
-                << "Content-Length: 0\r\n"
-                << "Connection: close\r\n\r\n";
-            c.sendBuf() = oss.str();
-            std::cout << "[RESPONSE] 204 Deleted: " << physical << std::endl;
-        }
-        c.setFileSize(c.sendBuf().size());
-        return;
-    }
+		if (!loc->index.empty()) {
+			std::string index_path = physical;
+			if (index_path[index_path.size()-1] != '/') index_path += "/";
+			index_path += loc->index;
+			struct stat ist;
+			if (stat(index_path.c_str(), &ist) == 0 && S_ISREG(ist.st_mode)) {
+				physical = index_path;
+				st = ist;
+				goto serve_file;
+			}
+		}
 
-    // --- 4. POST (file upload) ---
-    if (c.getMethod() == "POST") {
-        if (loc && !loc->upload_store.empty()) {
-            if (saveUpload(c, loc)) {
-                std::string body = "<html><body><h1>201 Created</h1></body></html>";
-                std::ostringstream oss;
-                oss << "HTTP/1.1 201 Created\r\n"
-                    << "Server: Webserv/1.0\r\n"
-                    << "Content-Length: " << body.size() << "\r\n"
-                    << "Content-Type: text/html\r\n"
-                    << "Connection: close\r\n\r\n" << body;
-                c.sendBuf() = oss.str();
-                std::cout << "[RESPONSE] 201 Created" << std::endl;
-            } else {
-                c.sendBuf() = buildErrorResponse(500, "Internal Server Error", srv);
-            }
-        } else {
-            // POST to a route without upload_store -> 204
-            std::ostringstream oss;
-            oss << "HTTP/1.1 204 No Content\r\n"
-                << "Server: Webserv/1.0\r\n"
-                << "Content-Length: 0\r\n"
-                << "Connection: close\r\n\r\n";
-            c.sendBuf() = oss.str();
-        }
-        c.setFileSize(c.sendBuf().size());
-        return;
-    }
+		if (loc->autoindex) {
+			std::string body = buildAutoindex(c.getPath(), physical);
+			std::ostringstream oss;
+			oss << "HTTP/1.1 200 OK\r\n"
+				<< "Server: Webserv/1.0\r\n"
+				<< "Content-Type: text/html\r\n"
+				<< "Content-Length: " << body.size() << "\r\n"
+				<< "Connection: close\r\n\r\n"
+				<< body;
+			c.sendBuf() = oss.str();
+			c.setFileSize(c.sendBuf().size());
+			return;
+		}
 
-    // --- 5. GET ---
-    struct stat st;
-
-    if (stat(physical.c_str(), &st) != 0) {
-        c.sendBuf() = buildErrorResponse(404, "Not Found", srv);
-        c.setFileSize(c.sendBuf().size());
-        std::cout << "[RESPONSE] 404: " << physical << std::endl;
-        return;
-    }
-
-    // Directory handling
-    if (S_ISDIR(st.st_mode)) {
-        // Missing trailing slash -> redirect
-        if (c.getPath()[c.getPath().size()-1] != '/') {
-            std::ostringstream oss;
-            oss << "HTTP/1.1 301 Moved Permanently\r\n"
-                << "Location: " << c.getPath() << "/\r\n"
-                << "Content-Length: 0\r\n"
-                << "Connection: close\r\n\r\n";
-            c.sendBuf() = oss.str();
-            c.setFileSize(c.sendBuf().size());
-            return;
-        }
-
-        // Try index file
-        if (!loc->index.empty()) {
-            std::string index_path = physical;
-            if (index_path[index_path.size()-1] != '/') index_path += "/";
-            index_path += loc->index;
-            struct stat ist;
-            if (stat(index_path.c_str(), &ist) == 0 && S_ISREG(ist.st_mode)) {
-                physical = index_path;
-                st = ist;
-                goto serve_file; // found index, fall through to file serving
-            }
-        }
-
-        // Autoindex
-        if (loc->autoindex) {
-            std::string body = buildAutoindex(c.getPath(), physical);
-            std::ostringstream oss;
-            oss << "HTTP/1.1 200 OK\r\n"
-                << "Server: Webserv/1.0\r\n"
-                << "Content-Type: text/html\r\n"
-                << "Content-Length: " << body.size() << "\r\n"
-                << "Connection: " << (c.isKeepAlive() ? "keep-alive" : "close") << "\r\n\r\n"
-                << body;
-            c.sendBuf() = oss.str();
-            c.setFileSize(c.sendBuf().size());
-            std::cout << "[RESPONSE] 200 Autoindex" << std::endl;
-            return;
-        }
-
-        // Directory but no index and no autoindex -> 403
-        c.sendBuf() = buildErrorResponse(403, "Forbidden", srv);
-        c.setFileSize(c.sendBuf().size());
-        return;
-    }
+		c.sendBuf() = buildErrorResponse(403, "Forbidden", srv);
+		c.setFileSize(c.sendBuf().size());
+		return;
+	}
 
 serve_file:
-    // Regular file
-    if (!S_ISREG(st.st_mode)) {
-        c.sendBuf() = buildErrorResponse(404, "Not Found", srv);
-        c.setFileSize(c.sendBuf().size());
-        return;
-    }
+	if (!S_ISREG(st.st_mode)) {
+		c.sendBuf() = buildErrorResponse(404, "Not Found", srv);
+		c.setFileSize(c.sendBuf().size());
+		return;
+	}
 
-    c.openFile(physical);
-    if (!c.file_stream.is_open()) {
-        c.sendBuf() = buildErrorResponse(403, "Forbidden", srv);
-        c.setFileSize(c.sendBuf().size());
-        return;
-    }
+	c.openFile(physical);
+	if (!c.file_stream.is_open()) {
+		c.sendBuf() = buildErrorResponse(403, "Forbidden", srv);
+		c.setFileSize(c.sendBuf().size());
+		return;
+	}
 
-    // For file responses, file_size is the actual file size.
-    // bytes_sent tracks file bytes only (header is separate via sendBuf).
-    c.setFileSize(st.st_size);
-    {
-        std::ostringstream oss;
-        oss << "HTTP/1.1 200 OK\r\n"
-            << "Server: Webserv/1.0\r\n"
-            << "Content-Length: " << st.st_size << "\r\n"
-            << "Content-Type: " << getMimeType(physical) << "\r\n"
-            << "Connection: " << (c.isKeepAlive() ? "keep-alive" : "close") << "\r\n\r\n";
-        c.sendBuf() = oss.str();
-    }
-    std::cout << "[RESPONSE] 200 OK: " << physical << std::endl;
+	c.setFileSize(st.st_size);
+	{
+		std::ostringstream oss;
+		oss << "HTTP/1.1 200 OK\r\n"
+			<< "Server: Webserv/1.0\r\n"
+			<< "Content-Length: " << st.st_size << "\r\n"
+			<< "Content-Type: " << getMimeType(physical) << "\r\n"
+			<< "Connection: close\r\n\r\n";
+		c.sendBuf() = oss.str();
+	}
 }
 
-// --- SEND RESPONSE ---
-// Two-phase send: first drain sendBuf (headers + small inline bodies),
-// then stream the file if one is open.
-// bytes_sent ONLY counts file bytes — it is never incremented during header sending.
-// This fixes the previous bug where inline responses never triggered "done".
 void Server::handleResponse(int fd) {
-    Client& c = *clients[fd];
-    char chunk[8192];
+	Client& c = *clients[fd];
+	char chunk[8192];
 
-    // Phase 1: send headers (and full body for non-file responses)
-    if (!c.headerSent()) {
-        ssize_t n = send(fd, c.sendBuf().c_str(), c.sendBuf().size(), 0);
-        if (n > 0) {
-            c.sendBuf().erase(0, n);
-            if (c.sendBuf().empty())
-                c.setHeaderSent(true);
-        } else if (n == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-            return; // epoll will call us again when writable
-        } else {
-            c.setState(CLOSED);
-            return;
-        }
-        // Still have header bytes to send
-        if (!c.headerSent()) return;
-    }
+	if (!c.headerSent()) {
+		ssize_t n = send(fd, c.sendBuf().c_str(), c.sendBuf().size(), 0);
+		if (n > 0) {
+			c.sendBuf().erase(0, n);
+			if (c.sendBuf().empty())
+				c.setHeaderSent(true);
+		} else if (n == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+			return;
+		} else {
+			c.setState(CLOSED);
+			return;
+		}
+		if (!c.headerSent()) return;
+	}
 
-    // Phase 2: stream file body (only for real file responses)
-    if (c.file_stream.is_open()) {
-        if (c.getBytesSent() < c.getFileSize()) {
-            c.file_stream.clear();
-            c.file_stream.seekg(static_cast<std::streamoff>(c.getBytesSent()));
+	if (c.file_stream.is_open()) {
+		if (c.getBytesSent() < c.getFileSize()) {
+			c.file_stream.clear();
+			c.file_stream.seekg(static_cast<std::streamoff>(c.getBytesSent()));
 
-            std::streamsize actual = c.readFile(chunk, sizeof(chunk));
-            if (actual <= 0) { c.setState(CLOSED); return; }
+			std::streamsize actual = c.readFile(chunk, sizeof(chunk));
+			if (actual <= 0) { c.setState(CLOSED); return; }
 
-            ssize_t n = send(fd, chunk, static_cast<size_t>(actual), 0);
-            if (n == -1) {
-                if (errno == EAGAIN || errno == EWOULDBLOCK) return;
-                c.setState(CLOSED);
-                return;
-            }
-            if (n > 0) c.setBytesSent(static_cast<size_t>(n));
-            return; // always return here; check done on next event
-        }
-        // File fully sent — fall through to done logic
-    }
+			ssize_t n = send(fd, chunk, static_cast<size_t>(actual), 0);
+			if (n == -1) {
+				if (errno == EAGAIN || errno == EWOULDBLOCK) return;
+				c.setState(CLOSED);
+				return;
+			}
+			if (n > 0) c.setBytesSent(static_cast<size_t>(n));
+			return;
+		}
+	}
 
-    // Phase 3: done
-    // For inline responses: sendBuf is empty and no file -> done immediately.
-    // For file responses: bytes_sent >= file_size -> done.
-    bool file_done = !c.file_stream.is_open() ||
-                     (c.getBytesSent() >= c.getFileSize());
+	bool file_done = !c.file_stream.is_open() ||
+	                 (c.getBytesSent() >= c.getFileSize());
 
-    if (c.sendBuf().empty() && file_done) {
-        std::cout << "[DONE] fd=" << fd
-                  << (c.isKeepAlive() ? " keep-alive" : " close") << std::endl;
-        if (c.isKeepAlive()) {
-            c.reset();
-            modifyEpoll(fd, EPOLLIN);
-        } else {
-            c.setState(CLOSED);
-        }
-    }
+	if (c.sendBuf().empty() && file_done) {
+		if (c.isKeepAlive()) {
+			c.reset();
+			modifyEpoll(fd, EPOLLIN);
+		} else {
+			c.setState(CLOSED);
+		}
+	}
 }

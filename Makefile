@@ -1,7 +1,7 @@
 NAME    = webserv
 
 CC      = c++
-CFLAGS  = -Wall -Wextra -std=c++98 -I inc
+CFLAGS  = -Wall -Wextra -Werror -std=c++98 -I inc
 
 SRCS    = src/main.cpp \
           src/config/Lexer.cpp \
@@ -16,7 +16,8 @@ SRCS    = src/main.cpp \
           src/server/Server.cpp \
           src/server/Request.cpp \
           src/server/ErrorPages.cpp \
-          src/server/Response.cpp
+          src/server/Response.cpp \
+          src/server/CGI.cpp
 
 OBJS    = $(SRCS:.cpp=.o)
 

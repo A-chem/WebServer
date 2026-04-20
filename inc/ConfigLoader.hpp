@@ -7,14 +7,14 @@
 #include <map>
 #include <utility>
 
-struct	LocationConfig {
+struct LocationConfig {
 	std::string				path;
 	std::string				root;
 	std::string				index;
 	bool					autoindex;
 	size_t					client_max_body_size;
 	std::pair<int, std::string>		return_url;
-	std::string				cgi_pass;
+	std::map<std::string, std::string>	cgi_pass;
 	std::string				upload_store;
 	std::vector<std::string>		allowed_methods;
 	std::map<int, std::string>		error_pages;
@@ -22,7 +22,7 @@ struct	LocationConfig {
 	LocationConfig() : autoindex(false), client_max_body_size(0) {}
 };
 
-struct	ServerConfig {
+struct ServerConfig {
 	std::string					host;
 	int						port;
 	std::vector<std::pair<std::string, int> >	listen_sockets;
@@ -34,7 +34,7 @@ struct	ServerConfig {
 	ServerConfig() : host("0.0.0.0"), port(80), client_max_body_size(0) {}
 };
 
-class	ConfigLoader {
+class ConfigLoader {
 	private:
 		void	loadServer(ConfigNode* node, ServerConfig& conf);
 		void	loadLocation(ConfigNode* node, LocationConfig parent, std::vector<LocationConfig>& list);

@@ -32,7 +32,7 @@ std::string Server::buildErrorResponse(int code, const std::string& msg, ServerC
 		body = defaultErrorPage(code, msg);
 
 	std::ostringstream response;
-	response << "HTTP/1.1" << code << " " << msg << "\r\n"
+	response << "HTTP/1.1 " << code << " " << msg << "\r\n"
 		<< "Server: Webserv/1.0\r\n"
 		<< "Content-Length: " << body.size() << "\r\n"
 		<< "Connection: close\r\n"

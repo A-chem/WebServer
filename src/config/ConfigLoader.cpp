@@ -5,8 +5,7 @@
 ConfigLoader::ConfigLoader() {}
 ConfigLoader::~ConfigLoader() {}
 
-// hna function bach kan joini lpaths dyal child ol parent btari9a ss7i7a kan 3ndi had lmochkil ( parent = /www/ + child = /folderx = /www//folderx )
-std::string	joinPaths(const std::string& parent, const std::string& child) {
+std::string joinPaths(const std::string& parent, const std::string& child) {
 	if (parent.empty() || parent == "/") return child;
 	if (child.empty()) return parent;
 
@@ -19,7 +18,7 @@ std::string	joinPaths(const std::string& parent, const std::string& child) {
 	return parent + child;
 }
 
-std::vector<ServerConfig>	ConfigLoader::loadServers(ConfigNode* root) {
+std::vector<ServerConfig> ConfigLoader::loadServers(ConfigNode* root) {
 	std::vector<ServerConfig> servers;
 	if (!root || root->type != NODE_BLOCK) return servers;
 
@@ -33,9 +32,9 @@ std::vector<ServerConfig>	ConfigLoader::loadServers(ConfigNode* root) {
 	return servers;
 }
 
-void	ConfigLoader::loadServer(ConfigNode* node, ServerConfig& conf) {
-	std::string	serverRoot;
-	std::string	serverIndex;
+void ConfigLoader::loadServer(ConfigNode* node, ServerConfig& conf) {
+	std::string serverRoot;
+	std::string serverIndex;
 
 	for (size_t i = 0; i < node->children.size(); i++) {
 		ConfigNode* child = node->children[i];
@@ -60,14 +59,13 @@ void	ConfigLoader::loadServer(ConfigNode* node, ServerConfig& conf) {
 		conf.listen_sockets.push_back(std::make_pair("0.0.0.0", 80));
 	}
 
-	LocationConfig	defaultLoc;
+	LocationConfig defaultLoc;
 	defaultLoc.path = "/";
 	defaultLoc.root = serverRoot;
 	defaultLoc.index = serverIndex;
 	defaultLoc.client_max_body_size = conf.client_max_body_size;
 	defaultLoc.error_pages = conf.error_pages;
 
-	// start load the location config here and pass what can inherit from the parent node (in this case root) but conf is gonna be used inside loadlocation too 
 	for (size_t i = 0; i < node->children.size(); i++) {
 		if (node->children[i]->name == "location") {
 			loadLocation(node->children[i], defaultLoc, conf.locations);
@@ -75,23 +73,26 @@ void	ConfigLoader::loadServer(ConfigNode* node, ServerConfig& conf) {
 	}
 }
 
-
-void	ConfigLoader::loadLocation(ConfigNode* node, LocationConfig parent, std::vector<LocationConfig>& list) {
-	LocationConfig	loc = parent;
+void ConfigLoader::loadLocation(ConfigNode* node, LocationConfig parent, std::vector<LocationConfig>& list) {
+	LocationConfig loc = parent;
 	loc.path = joinPaths(parent.path, node->args[0]);
 
 	for (size_t i = 0; i < node->children.size(); i++) {
-	ConfigNode* child = node->children[i];
+		ConfigNode* child = node->children[i];
 
-	if (child->name == "root") loc.root = child->args[0];
-	else if (child->name == "index") loc.index = child->args[0];
-	else if (child->name == "autoindex") loc.autoindex = (child->args[0] == "on");
-	else if (child->name == "client_max_body_size") loc.client_max_body_size = parseSize(child->args[0]);
-	else if (child->name == "return") loc.return_url = std::make_pair(std::atoi(child->args[0].c_str()), child->args[1]);
-	else if (child->name == "cgi_pass") loc.cgi_pass = child->args[0];
-	else if (child->name == "upload_store") loc.upload_store = child->args[0];
-	else if (child->name == "limit_except") { loc.allowed_methods = child->args; }
-	else if (child->name == "location") { loadLocation(child, loc, list);}
+		if (child->name == "root") loc.root = child->args[0];
+		else if (child->name == "index") loc.index = child->args[0];
+		else if (child->name == "autoindex") loc.autoindex = (child->args[0] == "on");
+		else if (child->name == "client_max_body_size") loc.client_max_body_size = parseSize(child->args[0]);
+		else if (child->name == "return") loc.return_url = std::make_pair(std::atoi(child->args[0].c_str()), child->args[1]);
+		else if (child->name == "cgi_pass") {
+			if (child->args.size() >= 2) {
+				loc.cgi_pass[child->args[0]] = child->args[1];
+			}
+		}
+		else if (child->name == "upload_store") loc.upload_store = child->args[0];
+		else if (child->name == "limit_except") { loc.allowed_methods = child->args; }
+		else if (child->name == "location") { loadLocation(child, loc, list);}
 	}
 	list.push_back(loc);
 }

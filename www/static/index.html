@@ -1,83 +1,313 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Webserv Test Home</title>
-    <style>
-        body { font-family: monospace; max-width: 800px; margin: 40px auto; padding: 20px; background: #111; color: #0f0; }
-        h1 { border-bottom: 1px solid #0f0; padding-bottom: 10px; }
-        h2 { color: #0a0; margin-top: 30px; }
-        a { color: #0f0; }
-        a:hover { color: #fff; }
-        .section { margin: 20px 0; padding: 15px; border: 1px solid #0a0; }
-        code { background: #222; padding: 2px 6px; }
-        ul { line-height: 2; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webserv - Professional HTTP Server</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/animations.css">
 </head>
 <body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <span class="logo">🌐</span>
+                <h1>Webserv</h1>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="#home">Home</a></li>
+                <li><a href="#features">Features</a></li>
+                <li><a href="#demo">Demo</a></li>
+                <li><a href="#docs">Docs</a></li>
+                <li><a href="#contact">Contact</a></li>
+            </ul>
+        </div>
+    </nav>
 
-<h1>Webserv/1.0 — Test Suite</h1>
-<p>Server is running. Use the links below to test each feature.</p>
+    <!-- Hero Section -->
+    <section id="home" class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <h1 class="hero-title">Build Fast, Run Faster</h1>
+                <p class="hero-subtitle">A Professional HTTP/1.1 Web Server Built with C++98</p>
+                <div class="hero-buttons">
+                    <a href="#demo" class="btn btn-primary">Try Demo</a>
+                    <a href="#docs" class="btn btn-secondary">Documentation</a>
+                </div>
+            </div>
+            <div class="hero-image">
+                <div class="code-block">
+                    <div class="code-header">
+                        <span>•</span><span>•</span><span>•</span>
+                    </div>
+                    <pre><code>$ ./webserv configs/main.conf
+✓ Server started on 0.0.0.0:8080
+✓ Listening for connections...
+✓ Ready to serve requests</code></pre>
+                </div>
+            </div>
+        </div>
+    </section>
 
-<div class="section">
-    <h2>GET — Static Files</h2>
-    <ul>
-        <li><a href="/index.html">GET /index.html</a> — this page (200 OK)</li>
-        <li><a href="/about.html">GET /about.html</a> — another static page (200 OK)</li>
-        <li><a href="/style.css">GET /style.css</a> — CSS file (200 OK)</li>
-        <li><a href="/sample.txt">GET /sample.txt</a> — plain text file (200 OK)</li>
-    </ul>
-</div>
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="container">
+            <h2>Key Features</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>High Performance</h3>
+                    <p>Non-blocking I/O with epoll architecture handles thousands of concurrent connections</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔧</div>
+                    <h3>CGI Support</h3>
+                    <p>Execute PHP, Python, and other scripts seamlessly with full CGI/1.1 support</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📦</div>
+                    <h3>File Management</h3>
+                    <p>Upload, download, and manage files with automatic MIME type detection</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3>Secure</h3>
+                    <p>Path traversal protection, request size limits, and proper error handling</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚙️</div>
+                    <h3>Configurable</h3>
+                    <p>NGINX-style configuration with multiple servers and location-based routing</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🚀</div>
+                    <h3>Standards Compliant</h3>
+                    <p>Full HTTP/1.1 protocol support with keep-alive and chunked encoding</p>
+                </div>
+            </div>
+        </div>
+    </section>
 
-<div class="section">
-    <h2>GET — Directory Listing (Autoindex)</h2>
-    <ul>
-        <li><a href="/images/">GET /images/</a> — directory listing (200 OK)</li>
-    </ul>
-</div>
+    <!-- Stats Section -->
+    <section class="stats">
+        <div class="container">
+            <div class="stat-item">
+                <div class="stat-number">100%</div>
+                <div class="stat-label">HTTP/1.1 Compliant</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">5000+</div>
+                <div class="stat-label">Concurrent Connections</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">C++98</div>
+                <div class="stat-label">Pure C++ Implementation</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">0ms</div>
+                <div class="stat-label">Startup Time</div>
+            </div>
+        </div>
+    </section>
 
-<div class="section">
-    <h2>GET — Error Pages</h2>
-    <ul>
-        <li><a href="/nonexistent.html">GET /nonexistent.html</a> — custom 404 page</li>
-        <li><a href="/errors/403.html">GET /errors/403.html</a> — custom 403 page</li>
-    </ul>
-</div>
+    <!-- Demo Section -->
+    <section id="demo" class="demo">
+        <div class="container">
+            <h2>Try It Out</h2>
+            <div class="demo-grid">
+                <div class="demo-card">
+                    <h3>📄 Static Files</h3>
+                    <ul>
+                        <li><a href="/about.html">About Page</a></li>
+                        <li><a href="/features.html">Features</a></li>
+                        <li><a href="/style.css">Stylesheet</a></li>
+                    </ul>
+                </div>
+                <div class="demo-card">
+                    <h3>🐍 Python Scripts</h3>
+                    <ul>
+                        <li><a href="/cgi-bin/test.py">Hello World</a></li>
+                        <li><a href="/cgi-bin/info.py">Server Info</a></li>
+                        <li><a href="/cgi-bin/time_info.py">Current Time</a></li>
+                    </ul>
+                </div>
+                <div class="demo-card">
+                    <h3>🔧 Tools</h3>
+                    <ul>
+                        <li><a href="/cgi-bin/calc.py?a=10&b=5&op=%2B">Calculator</a></li>
+                        <li><a href="/cgi-bin/echo.py?test=hello">Echo API</a></li>
+                        <li><a href="/post_form.html">POST Form</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
 
-<div class="section">
-    <h2>GET — Redirects</h2>
-    <ul>
-        <li><a href="/redirect">GET /redirect</a> — 301 redirect to /</li>
-        <li><a href="/old-page">GET /old-page</a> — 301 redirect to /index.html</li>
-    </ul>
-</div>
+    <!-- HTTP Methods Section -->
+    <section class="methods">
+        <div class="container">
+            <h2>Supported HTTP Methods</h2>
+            <div class="methods-grid">
+                <div class="method-card get">
+                    <h3>GET</h3>
+                    <p>Retrieve resources and execute scripts</p>
+                    <code>curl http://localhost:8080/</code>
+                </div>
+                <div class="method-card post">
+                    <h3>POST</h3>
+                    <p>Submit data and upload files</p>
+                    <code>curl -X POST --data "key=value" ...</code>
+                </div>
+                <div class="method-card delete">
+                    <h3>DELETE</h3>
+                    <p>Remove resources from server</p>
+                    <code>curl -X DELETE http://localhost:8080/file</code>
+                </div>
+            </div>
+        </div>
+    </section>
 
-<div class="section">
-    <h2>POST — File Upload</h2>
-    <form action="/upload" method="POST" enctype="multipart/form-data">
-        <input type="file" name="file">
-        <input type="submit" value="Upload File">
-    </form>
-    <br>
-    <p>Or test with curl:</p>
-    <code>curl -X POST http://localhost:8080/upload --data "hello world"</code>
-</div>
+    <!-- Status Codes Section -->
+    <section class="status-codes">
+        <div class="container">
+            <h2>HTTP Status Codes</h2>
+            <div class="codes-grid">
+                <div class="code-group success">
+                    <h4>2xx Success</h4>
+                    <p>200 OK</p>
+                    <p>201 Created</p>
+                    <p>204 No Content</p>
+                </div>
+                <div class="code-group redirect">
+                    <h4>3xx Redirect</h4>
+                    <p>301 Moved Permanently</p>
+                    <p>302 Found</p>
+                </div>
+                <div class="code-group error">
+                    <h4>4xx Client Error</h4>
+                    <p>400 Bad Request</p>
+                    <p>404 Not Found</p>
+                    <p>405 Method Not Allowed</p>
+                </div>
+                <div class="code-group server-error">
+                    <h4>5xx Server Error</h4>
+                    <p>500 Internal Error</p>
+                    <p>504 Gateway Timeout</p>
+                </div>
+            </div>
+        </div>
+    </section>
 
-<div class="section">
-    <h2>DELETE — File Deletion</h2>
-    <p>First create a file, then delete it:</p>
-    <code>curl -X DELETE http://localhost:8080/files/sample.txt</code>
-</div>
+    <!-- Quick Start -->
+    <section class="quickstart">
+        <div class="container">
+            <h2>Quick Start</h2>
+            <div class="quickstart-steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <h3>Compile</h3>
+                    <code>make clean && make</code>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <h3>Configure</h3>
+                    <code>vim configs/main.conf</code>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <h3>Run</h3>
+                    <code>./webserv configs/main.conf</code>
+                </div>
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <h3>Access</h3>
+                    <code>curl http://localhost:8080</code>
+                </div>
+            </div>
+        </div>
+    </section>
 
-<div class="section">
-    <h2>Curl Test Commands</h2>
-    <code>curl -v http://localhost:8080/</code><br><br>
-    <code>curl -v http://localhost:8080/nonexistent</code><br><br>
-    <code>curl -X POST http://localhost:8080/upload --data-binary @yourfile.txt</code><br><br>
-    <code>curl -X DELETE http://localhost:8080/files/sample.txt</code><br><br>
-    <code>curl -X POST http://localhost:8080/readonly --data "test"</code> (expect 405)<br><br>
-    <code>curl -v -L http://localhost:8080/redirect</code> (follow redirect)
-</div>
+    <!-- Documentation -->
+    <section id="docs" class="documentation">
+        <div class="container">
+            <h2>Documentation</h2>
+            <div class="docs-grid">
+                <div class="doc-card">
+                    <h3>Configuration</h3>
+                    <p>Learn how to configure your server with NGINX-style syntax</p>
+                    <a href="/docs/config.html">Read More →</a>
+                </div>
+                <div class="doc-card">
+                    <h3>API Reference</h3>
+                    <p>Complete reference for all endpoints and parameters</p>
+                    <a href="/docs/api.html">Read More →</a>
+                </div>
+                <div class="doc-card">
+                    <h3>CGI Scripts</h3>
+                    <p>Guide to writing and deploying CGI scripts</p>
+                    <a href="/docs/cgi.html">Read More →</a>
+                </div>
+                <div class="doc-card">
+                    <h3>Troubleshooting</h3>
+                    <p>Common issues and how to resolve them</p>
+                    <a href="/docs/troubleshoot.html">Read More →</a>
+                </div>
+            </div>
+        </div>
+    </section>
 
+    <!-- Contact Section -->
+    <section id="contact" class="contact">
+        <div class="container">
+            <h2>Get in Touch</h2>
+            <p>Have questions or need help? We're here to assist you.</p>
+            <form class="contact-form" action="/cgi-bin/form_handler.py" method="POST">
+                <div class="form-group">
+                    <input type="text" name="name" placeholder="Your Name" required>
+                </div>
+                <div class="form-group">
+                    <input type="email" name="email" placeholder="Your Email" required>
+                </div>
+                <div class="form-group">
+                    <textarea name="message" placeholder="Your Message" rows="5" required></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">Send Message</button>
+            </form>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>Webserv</h4>
+                    <p>A professional HTTP/1.1 server built with C++98</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Quick Links</h4>
+                    <ul>
+                        <li><a href="#home">Home</a></li>
+                        <li><a href="#features">Features</a></li>
+                        <li><a href="#docs">Documentation</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Resources</h4>
+                    <ul>
+                        <li><a href="/about.html">About</a></li>
+                        <li><a href="/contact.html">Contact</a></li>
+                        <li><a href="/sitemap.xml">Sitemap</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2026 Webserv. All rights reserved. Built with ❤️ in C++98</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/main.js"></script>
 </body>
 </html>

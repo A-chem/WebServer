@@ -1,9 +1,0 @@
-This is a sample plain text file.
-Used to test text/plain MIME type response.
-
-Line 1
-Line 2
-Line 3
-
-The server should respond with:
-Content-Type: text/plain
